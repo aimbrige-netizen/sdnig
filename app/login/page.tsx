@@ -38,10 +38,23 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      {/* 배경 장식 — 은은한 브랜드 그라데이션 블러 */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 left-1/2 h-80 w-[36rem] -translate-x-1/2 rounded-full opacity-25 blur-3xl"
+        style={{ background: 'linear-gradient(135deg, var(--brand-from), var(--brand-to))' }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-40 right-[12%] h-72 w-72 rounded-full opacity-15 blur-3xl"
+        style={{ background: 'linear-gradient(135deg, var(--brand-to), var(--brand-from))' }}
+      />
+
+      <Card className="animate-fade-up w-full max-w-sm rounded-2xl shadow-lift">
         <CardHeader className="text-center">
-          <CardTitle className="text-xl">스딩 B2B 업체 관리</CardTitle>
+          <div aria-hidden className="bg-brand-gradient mx-auto mb-2 h-9 w-9 rounded-xl shadow-sm" />
+          <CardTitle className="text-xl font-bold tracking-tight">스딩 B2B 업체 관리</CardTitle>
           <CardDescription>비밀번호를 입력해주세요</CardDescription>
         </CardHeader>
         <CardContent>

@@ -38,6 +38,7 @@ export interface VendorPhoto {
 export interface ProductItem {
   name: string;
   description: string;
+  price?: number | null; // 상품가격 (선택)
   photos?: string[]; // 상품사진 (선택, 여러 장 가능)
 }
 

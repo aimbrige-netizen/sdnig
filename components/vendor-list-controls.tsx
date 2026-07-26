@@ -113,7 +113,7 @@ export function VendorListControls({ q, category, sido, gugun, sort, view }: Ven
         value={sort}
         onChange={(e) => update({ sort: e.target.value })}
       />
-      <div className="ml-auto flex overflow-hidden rounded-md border border-input shadow-xs" role="group" aria-label="보기 방식">
+      <div className="ml-auto flex overflow-hidden rounded-full border border-input shadow-xs" role="group" aria-label="보기 방식">
         {(
           [
             { code: 'card', label: '카드' },
@@ -126,10 +126,10 @@ export function VendorListControls({ q, category, sido, gugun, sort, view }: Ven
             onClick={() => update({ view: v.code })}
             aria-pressed={view === v.code}
             className={cn(
-              'h-9 px-3 text-sm transition-colors',
+              'h-9 px-3.5 text-sm transition-all duration-200',
               view === v.code
-                ? 'bg-neutral-900 text-white'
-                : 'bg-white text-neutral-700 hover:bg-neutral-100'
+                ? 'bg-neutral-900 font-medium text-white'
+                : 'bg-white text-neutral-600 hover:bg-neutral-900/5 hover:text-neutral-900'
             )}
           >
             {v.label}

@@ -11,6 +11,7 @@ export interface ProductRow {
   id: string;
   name: string;
   description: string;
+  price: string; // 상품가격 (선택) — 숫자 입력을 문자열로 보관
   photos: string[]; // 상품사진 (선택, 여러 장 가능)
 }
 
@@ -61,7 +62,7 @@ export interface VendorPayloadInput {
   businessHoursEnd: string;
   region: string;
   address: string;
-  products: { name: string; description: string; photos: string[] }[];
+  products: { name: string; description: string; price: number | null; photos: string[] }[];
   styleMoods: string[];
   options: { name: string; price: number | null; desc: string }[];
   description: string;
@@ -90,7 +91,7 @@ export interface VendorDTO {
 }
 
 export function emptyProduct(): ProductRow {
-  return { id: crypto.randomUUID(), name: '', description: '', photos: [] };
+  return { id: crypto.randomUUID(), name: '', description: '', price: '', photos: [] };
 }
 export const EMPTY_OPTION: OptionRow = { name: '', price: '', desc: '' };
 
@@ -313,8 +314,13 @@ export function serializeForm(state: VendorFormState): VendorPayloadInput {
     region: joinRegion(state.regionSido, state.regionGugun),
     address: state.address.trim(),
     products: state.products
-      .map((p) => ({ name: p.name.trim(), description: p.description.trim(), photos: p.photos }))
-      .filter((p) => p.name || p.description || p.photos.length > 0),
+      .map((p) => ({
+        name: p.name.trim(),
+        description: p.description.trim(),
+        price: toNumber(p.price) ?? null,
+        photos: p.photos,
+      }))
+      .filter((p) => p.name || p.description || p.price !== null || p.photos.length > 0),
     styleMoods: state.styleMoods,
     options: state.options
       .map((o) => ({ name: o.name.trim(), price: toNumber(o.price) ?? null, desc: o.desc.trim() }))
@@ -350,6 +356,7 @@ export function formStateFromVendor(vendor: VendorDTO): VendorFormState {
       id: crypto.randomUUID(),
       name: asString(p.name),
       description: asString(p.description),
+      price: asString(p.price),
       photos: Array.isArray(p.photos) ? p.photos.filter((u): u is string => typeof u === 'string') : [],
     }));
   if (state.products.length === 0) state.products = [emptyProduct()];

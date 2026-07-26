@@ -53,30 +53,34 @@
   --font-sans: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic',
     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* 라이트 전용 디자인 (Genspark 풍) — 쿨그레이 배경 + 화이트 카드 + 인디고→바이올렛 액센트 */
+  --background: oklch(0.975 0.003 264);
+  --foreground: oklch(0.165 0.012 264);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.165 0.012 264);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.165 0.012 264);
+  --primary: oklch(0.21 0.015 264);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.965 0.004 264);
+  --secondary-foreground: oklch(0.21 0.015 264);
+  --muted: oklch(0.965 0.004 264);
+  --muted-foreground: oklch(0.53 0.02 264);
+  --accent: oklch(0.955 0.015 277);
+  --accent-foreground: oklch(0.4 0.15 277);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.922 0.006 264);
+  --input: oklch(0.895 0.008 264);
+  --ring: oklch(0.585 0.233 277);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.75rem;
+  /* 브랜드 그라데이션 (인디고 500 → 바이올렛 500) */
+  --brand-from: oklch(0.585 0.233 277);
+  --brand-to: oklch(0.606 0.25 293);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -130,5 +134,64 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* ---------- 디자인 유틸리티 (Genspark 풍 라이트 테마) ---------- */
+
+/* 부드러운 카드 그림자 / 호버 리프트 그림자 */
+@utility shadow-soft {
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 0.04),
+    0 4px 16px rgb(16 24 40 / 0.06);
+}
+@utility shadow-lift {
+  box-shadow:
+    0 2px 4px rgb(16 24 40 / 0.05),
+    0 12px 28px rgb(16 24 40 / 0.11);
+}
+
+/* 브랜드 그라데이션 (배경 / 텍스트) */
+@utility bg-brand-gradient {
+  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+}
+@utility text-brand-gradient {
+  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* 카드 공통 — 흰 배경 + 큰 라운드 + 은은한 테두리/그림자 */
+@utility card-surface {
+  background-color: var(--card);
+  border: 1px solid rgb(16 24 40 / 0.06);
+  border-radius: 1rem;
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 0.04),
+    0 4px 16px rgb(16 24 40 / 0.06);
+}
+
+/* 진입 모션 — 아래에서 살짝 떠오르며 페이드인 */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@utility animate-fade-up {
+  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
   }
 }

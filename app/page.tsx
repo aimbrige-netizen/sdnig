@@ -21,9 +21,9 @@ function pctLabel(p: number): string {
 
 function Meter({ value, thick }: { value: number; thick?: boolean }) {
   return (
-    <div className={`${thick ? 'h-3' : 'h-2'} w-full overflow-hidden rounded-full bg-neutral-100`}>
+    <div className={`${thick ? 'h-3' : 'h-2'} w-full overflow-hidden rounded-full bg-neutral-900/[0.06]`}>
       <div
-        className="h-full rounded-full bg-neutral-900"
+        className="h-full rounded-full bg-brand-gradient transition-[width] duration-700 ease-out"
         style={{ width: `${Math.min(100, value)}%` }}
       />
     </div>
@@ -101,15 +101,15 @@ export default async function DashboardPage() {
     <>
       <AdminHeader />
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">수집 현황 대시보드</h1>
+        <div className="mb-5 flex items-center justify-between">
+          <h1 className="text-xl font-bold tracking-tight">수집 현황 대시보드</h1>
           <Button render={<Link href="/vendors" />} variant="outline" size="sm">
             업체 리스트 보기
           </Button>
         </div>
 
         {/* 통합 진행률 */}
-        <section className="mb-4 rounded-lg border bg-white p-5">
+        <section className="card-surface animate-fade-up mb-4 p-6">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-medium text-muted-foreground">통합 진행률</h2>
             <div className="text-sm text-muted-foreground tabular-nums">
@@ -117,22 +117,28 @@ export default async function DashboardPage() {
             </div>
           </div>
           <div className="mt-2 flex items-baseline gap-3">
-            <span className="text-4xl font-bold tabular-nums">{pctLabel(totalPct)}</span>
+            <span className="text-brand-gradient text-5xl font-bold tabular-nums tracking-tight">
+              {pctLabel(totalPct)}
+            </span>
             <span className="text-sm text-muted-foreground tabular-nums">
               {nf.format(totalRegistered)} / {nf.format(totalTarget)} 등록
             </span>
           </div>
-          <div className="mt-3">
+          <div className="mt-4">
             <Meter value={totalPct} thick />
           </div>
         </section>
 
         {/* 그룹별 진행률 (웨딩업체 / 혼수업체) */}
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {groupStats.map(({ group, target, registered, categories }) => {
+          {groupStats.map(({ group, target, registered, categories }, gi) => {
             const p = pctOf(registered, target);
             return (
-              <section key={group.key} className="rounded-lg border bg-white p-5">
+              <section
+                key={group.key}
+                className="card-surface animate-fade-up p-6"
+                style={{ animationDelay: `${60 + gi * 50}ms` }}
+              >
                 <div className="flex items-baseline justify-between">
                   <h2 className="font-semibold">{group.label} 진행률</h2>
                   <span className="text-2xl font-bold tabular-nums">{pctLabel(p)}</span>
@@ -166,8 +172,12 @@ export default async function DashboardPage() {
 
         {/* 그룹별 지역 진행률 */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {groupStats.map(({ group, regions, unregioned }) => (
-            <section key={group.key} className="rounded-lg border bg-white p-5">
+          {groupStats.map(({ group, regions, unregioned }, gi) => (
+            <section
+              key={group.key}
+              className="card-surface animate-fade-up p-6"
+              style={{ animationDelay: `${150 + gi * 50}ms` }}
+            >
               <h2 className="mb-4 font-semibold">{group.label} 지역별 진행률</h2>
               <ul className="space-y-2.5">
                 {regions.map((r) => {

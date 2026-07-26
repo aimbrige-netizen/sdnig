@@ -114,8 +114,8 @@ export default async function VendorsPage({
     <>
       <AdminHeader />
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">
+        <div className="mb-5 flex items-center justify-between">
+          <h1 className="text-xl font-bold tracking-tight">
             업체 리스트 <span className="ml-1 text-sm font-normal text-muted-foreground">{vendors.length}개</span>
           </h1>
           <Button render={<Link href="/vendors/new" />}>새 업체 등록</Button>
@@ -130,10 +130,10 @@ export default async function VendorsPage({
               <Link
                 key={f.code || 'all'}
                 href={chipHref(f.code)}
-                className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                className={`rounded-full border px-3.5 py-1.5 text-sm transition-all duration-200 ${
                   isActive
-                    ? 'border-neutral-900 bg-neutral-900 text-white'
-                    : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100'
+                    ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
+                    : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
                 }`}
               >
                 {f.label}
@@ -154,7 +154,7 @@ export default async function VendorsPage({
         />
 
         {vendors.length === 0 ? (
-          <div className="rounded-lg border border-dashed bg-white py-20 text-center text-muted-foreground">
+          <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-20 text-center text-muted-foreground">
             {filterDesc ? `${filterDesc} 조건에 등록된 업체가 없습니다.` : '등록된 업체가 없습니다.'}
             <div className="mt-3">
               <Button render={<Link href="/vendors/new" />} variant="outline" size="sm">
@@ -163,7 +163,7 @@ export default async function VendorsPage({
             </div>
           </div>
         ) : view === 'list' ? (
-          <div className="rounded-lg border bg-white">
+          <div className="card-surface animate-fade-up overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -212,14 +212,14 @@ export default async function VendorsPage({
             </Table>
           </div>
         ) : (
-          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="animate-fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {vendors.map((vendor) => {
               const thumb = mainPhotoUrl(vendor.photos);
               return (
                 <li key={vendor.id}>
                   <Link
                     href={`/vendors/${vendor.id}`}
-                    className="flex gap-3 rounded-lg border bg-white p-3 transition-shadow hover:shadow-md"
+                    className="card-surface flex gap-3 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift"
                   >
                     <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100">
                       {thumb ? (

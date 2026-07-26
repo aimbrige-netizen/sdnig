@@ -139,11 +139,11 @@ export function VendorForm({ vendor }: VendorFormProps) {
           <TabsTrigger value="photos">사진관리</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="common" className="rounded-lg border bg-white p-4 sm:p-6">
+        <TabsContent value="common" className="card-surface p-4 sm:p-6">
           <CommonFieldsForm state={state} patch={patch} isEdit={isEdit} />
         </TabsContent>
 
-        <TabsContent value="category" className="rounded-lg border bg-white p-4 sm:p-6">
+        <TabsContent value="category" className="card-surface p-4 sm:p-6">
           {category && categoryData ? (
             <CategoryFieldsForm
               category={category}
@@ -161,7 +161,7 @@ export function VendorForm({ vendor }: VendorFormProps) {
           )}
         </TabsContent>
 
-        <TabsContent value="photos" className="space-y-6 rounded-lg border bg-white p-4 sm:p-6">
+        <TabsContent value="photos" className="card-surface space-y-6 p-4 sm:p-6">
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">
               대표사진 <span className="text-destructive">*</span>

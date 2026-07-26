@@ -21,10 +21,11 @@ export function AdminHeader() {
   }
 
   return (
-    <header className="border-b bg-white">
+    <header className="sticky top-0 z-40 border-b border-black/5 bg-white/75 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <div className="flex items-center gap-5">
-          <Link href="/" className="text-base font-semibold">
+          <Link href="/" className="flex items-center gap-2 text-base font-bold tracking-tight">
+            <span aria-hidden className="bg-brand-gradient h-4 w-4 rounded-[5px] shadow-sm" />
             스딩 B2B 업체 관리
           </Link>
           <nav className="flex items-center gap-1">
@@ -36,10 +37,10 @@ export function AdminHeader() {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'rounded-md px-2.5 py-1.5 text-sm transition-colors',
+                    'rounded-full px-3.5 py-1.5 text-sm transition-all duration-200',
                     isActive
-                      ? 'bg-neutral-100 font-medium text-neutral-900'
-                      : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
+                      ? 'bg-neutral-900 font-medium text-white shadow-sm'
+                      : 'text-neutral-500 hover:bg-neutral-900/5 hover:text-neutral-900'
                   )}
                 >
                   {item.label}

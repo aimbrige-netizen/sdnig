@@ -7,7 +7,7 @@ export default function NewVendorPage() {
     <>
       <AdminHeader />
       <main className="mx-auto max-w-4xl px-4 py-6">
-        <h1 className="mb-4 text-lg font-semibold">새 업체 등록</h1>
+        <h1 className="mb-4 text-xl font-bold tracking-tight">새 업체 등록</h1>
         <VendorForm />
       </main>
     </>

@@ -121,7 +121,7 @@ export function CommonFieldsForm({ state, patch, isEdit }: CommonFieldsFormProps
       <Field
         label="상품구성"
         required
-        hint="상품명 + 설명을 +/− 버튼으로 여러 개 등록할 수 있습니다. 상품사진은 선택사항이며 상품마다 여러 장 추가할 수 있습니다. (상품명은 각 상품마다 필수입니다)"
+        hint="상품명 + 가격 + 설명을 +/− 버튼으로 여러 개 등록할 수 있습니다. 가격과 사진은 선택사항이며, 사진은 상품마다 여러 장 추가할 수 있습니다. (상품명은 각 상품마다 필수입니다)"
       >
         <div className="space-y-2">
           {state.products.map((product, i) => {
@@ -149,6 +149,20 @@ export function CommonFieldsForm({ state, patch, isEdit }: CommonFieldsFormProps
                     placeholder="상품명"
                     className="w-56"
                   />
+                  <div className="flex items-center gap-1">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={product.price}
+                      onChange={(e) => updateProduct({ price: e.target.value })}
+                      onWheel={(e) => (e.target as HTMLElement).blur()}
+                      placeholder="가격 (선택)"
+                      aria-label={`${i + 1}번째 상품 가격`}
+                      className="w-32"
+                    />
+                    <span className="text-xs text-muted-foreground">원</span>
+                  </div>
                   <Input
                     value={product.description}
                     onChange={(e) => updateProduct({ description: e.target.value })}
