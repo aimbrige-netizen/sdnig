@@ -66,21 +66,21 @@
   --secondary-foreground: oklch(0.21 0.015 264);
   --muted: oklch(0.965 0.004 264);
   --muted-foreground: oklch(0.53 0.02 264);
-  --accent: oklch(0.955 0.015 277);
-  --accent-foreground: oklch(0.4 0.15 277);
+  --accent: oklch(0.96 0.025 47);
+  --accent-foreground: oklch(0.45 0.16 35);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0.006 264);
   --input: oklch(0.895 0.008 264);
-  --ring: oklch(0.585 0.233 277);
+  --ring: oklch(0.68 0.19 40);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.75rem;
-  /* 브랜드 그라데이션 (인디고 500 → 바이올렛 500) */
-  --brand-from: oklch(0.585 0.233 277);
-  --brand-to: oklch(0.606 0.25 293);
+  /* 브랜드 그라데이션 — 스딩 로고 오렌지 */
+  --brand-from: oklch(0.74 0.18 47);
+  --brand-to: oklch(0.66 0.22 34);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);

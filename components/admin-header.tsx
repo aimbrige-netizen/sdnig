@@ -24,9 +24,10 @@ export function AdminHeader() {
     <header className="sticky top-0 z-40 border-b border-black/5 bg-white/75 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         <div className="flex items-center gap-5">
-          <Link href="/" className="flex items-center gap-2 text-base font-bold tracking-tight">
-            <span aria-hidden className="bg-brand-gradient h-4 w-4 rounded-[5px] shadow-sm" />
-            스딩 B2B 업체 관리
+          <Link href="/" className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="Sding" className="h-6 w-auto" />
+            <span className="text-sm font-medium text-neutral-500">B2B 업체 관리</span>
           </Link>
           <nav className="flex items-center gap-1">
             {NAV.map((item) => {

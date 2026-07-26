@@ -53,8 +53,9 @@ export default function LoginPage() {
 
       <Card className="animate-fade-up w-full max-w-sm rounded-2xl shadow-lift">
         <CardHeader className="text-center">
-          <div aria-hidden className="bg-brand-gradient mx-auto mb-2 h-9 w-9 rounded-xl shadow-sm" />
-          <CardTitle className="text-xl font-bold tracking-tight">스딩 B2B 업체 관리</CardTitle>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="Sding" className="mx-auto mb-1 h-9 w-auto" />
+          <CardTitle className="text-base font-medium text-muted-foreground">B2B 업체 관리</CardTitle>
           <CardDescription>비밀번호를 입력해주세요</CardDescription>
         </CardHeader>
         <CardContent>
