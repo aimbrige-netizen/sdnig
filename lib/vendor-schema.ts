@@ -30,6 +30,7 @@ export const optionSchema = z.object({
 export const vendorPayloadSchema = z
   .object({
     name: z.string().trim().min(1, '업체명을 입력해주세요'),
+    authorName: z.string().trim().min(1, '작성자를 입력해주세요'),
     category: z.enum(CATEGORY_CODES as [CategoryCode, ...CategoryCode[]], {
       error: '카테고리를 선택해주세요',
     }),

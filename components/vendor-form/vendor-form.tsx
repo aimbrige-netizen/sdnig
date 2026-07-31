@@ -23,6 +23,7 @@ import { MainPhotoField, PhotoListField } from './photo-uploader';
 // zod 이슈 경로 → 한글 필드명 (에러 요약 표시용)
 const FIELD_LABELS: Record<string, string> = {
   name: '업체명',
+  authorName: '작성자',
   category: '카테고리',
   contact: '업체연락처',
   businessHoursStart: '운영시간(시작)',
@@ -33,6 +34,29 @@ const FIELD_LABELS: Record<string, string> = {
   description: '업체설명',
   photos: '대표사진',
   categoryData: '업종별 정보',
+};
+
+type TabKey = 'common' | 'category' | 'photos';
+
+// zod 이슈 경로(최상위 키) → 그 필드가 위치한 탭. 탭에 없는 필드가 있으면 안내 문구가 가리키는
+// 입력창이 실제로는 언마운트돼 있어 보이지 않는 문제가 있어(특히 이번에 필수가 된 작성자처럼
+// 기존 업체는 값이 비어 있던 필드), 검증 실패 시 해당 탭으로 자동 전환한다.
+const FIELD_TAB: Record<string, TabKey> = {
+  name: 'common',
+  authorName: 'common',
+  category: 'common',
+  contact: 'common',
+  businessHoursStart: 'common',
+  businessHoursEnd: 'common',
+  region: 'common',
+  address: 'common',
+  products: 'common',
+  styleMoods: 'common',
+  options: 'common',
+  description: 'common',
+  sdingBenefit: 'common',
+  categoryData: 'category',
+  photos: 'photos',
 };
 
 interface VendorFormProps {
@@ -48,6 +72,7 @@ export function VendorForm({ vendor }: VendorFormProps) {
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('common');
 
   // 함수 형태도 허용 — 비동기 작업(사진 업로드 등)이 끝난 시점의 최신 state를 기준으로
   // 갱신해야 그 사이에 있었던 다른 변경(행 추가/삭제, 다른 필드 입력)을 덮어쓰지 않는다.
@@ -71,6 +96,9 @@ export function VendorForm({ vendor }: VendorFormProps) {
         return `${label}: ${issue.message}`;
       });
       setErrors([...new Set(messages)]);
+      // 첫 오류가 속한 탭으로 전환 — 안 그러면 입력창이 비활성 탭에 언마운트돼 있어 안 보인다.
+      const firstRoot = String(parsed.error.issues[0]?.path[0] ?? '');
+      setActiveTab(FIELD_TAB[firstRoot] ?? 'common');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -130,7 +158,7 @@ export function VendorForm({ vendor }: VendorFormProps) {
         </div>
       )}
 
-      <Tabs defaultValue="common">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
         <TabsList className="w-full justify-start">
           <TabsTrigger value="common">공통정보</TabsTrigger>
           <TabsTrigger value="category">

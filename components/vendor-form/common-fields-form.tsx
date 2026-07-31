@@ -42,6 +42,15 @@ export function CommonFieldsForm({ state, patch, isEdit }: CommonFieldsFormProps
         <Input value={state.name} onChange={(e) => patch({ name: e.target.value })} placeholder="업체명" />
       </Field>
 
+      <Field label="작성자" required hint="이 업체 정보를 기입하는 담당 직원명입니다.">
+        <Input
+          value={state.authorName}
+          onChange={(e) => patch({ authorName: e.target.value })}
+          placeholder="예: 홍길동"
+          className="w-56"
+        />
+      </Field>
+
       <Field
         label="카테고리"
         required

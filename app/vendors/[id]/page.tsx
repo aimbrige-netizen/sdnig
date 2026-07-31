@@ -19,6 +19,7 @@ export default async function EditVendorPage({ params }: { params: Promise<{ id:
     id: vendor.id,
     category: vendor.category,
     name: vendor.name,
+    authorName: vendor.authorName,
     contact: vendor.contact,
     businessHoursStart: vendor.businessHoursStart,
     businessHoursEnd: vendor.businessHoursEnd,

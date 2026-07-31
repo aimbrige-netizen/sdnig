@@ -34,6 +34,7 @@ export type CategoryDataState = Record<string, string | boolean | string[] | Rep
 
 export interface VendorFormState {
   name: string;
+  authorName: string;
   category: CategoryCode | '';
   contact: string;
   businessHoursStart: string; // "HH:MM" 또는 ""
@@ -56,6 +57,7 @@ export interface VendorFormState {
 /** 서버로 보내는 페이로드 (lib/vendor-schema.ts 로 검증) */
 export interface VendorPayloadInput {
   name: string;
+  authorName: string;
   category: string;
   contact: string;
   businessHoursStart: string;
@@ -76,6 +78,7 @@ export interface VendorDTO {
   id: number;
   category: string;
   name: string;
+  authorName: string | null;
   contact: string | null;
   businessHoursStart: string | null;
   businessHoursEnd: string | null;
@@ -137,6 +140,7 @@ export function emptyCategoryData(category: CategoryCode): CategoryDataState {
 export function initialFormState(): VendorFormState {
   return {
     name: '',
+    authorName: '',
     category: '',
     contact: '',
     businessHoursStart: '',
@@ -307,6 +311,7 @@ export function serializeForm(state: VendorFormState): VendorPayloadInput {
 
   return {
     name: state.name.trim(),
+    authorName: state.authorName.trim(),
     category,
     contact: state.contact.trim(),
     businessHoursStart: state.businessHoursStart,
@@ -337,6 +342,7 @@ export function formStateFromVendor(vendor: VendorDTO): VendorFormState {
   const state = initialFormState();
   const category = vendor.category as CategoryCode;
   state.name = vendor.name ?? '';
+  state.authorName = vendor.authorName ?? '';
   state.category = category;
   state.contact = vendor.contact ?? '';
   state.businessHoursStart = vendor.businessHoursStart ?? '';

@@ -36,6 +36,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       data: {
         category: data.category,
         name: data.name,
+        authorName: data.authorName,
         contact: data.contact,
         businessHoursStart: data.businessHoursStart,
         businessHoursEnd: data.businessHoursEnd,

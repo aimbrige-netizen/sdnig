@@ -12,6 +12,7 @@ model Vendor {
   id                 Int      @id @default(autoincrement())
   category           String // wedding_hall, studio, dress ... (기획서 3절 14종 고정값)
   name               String
+  authorName         String? // 작성자 — 정보를 기입한 담당 직원명 (필수 입력, app 레벨에서 검증)
   contact            String? // 업체연락처
   businessHoursStart String? // "10:00"
   businessHoursEnd   String? // "19:00"
