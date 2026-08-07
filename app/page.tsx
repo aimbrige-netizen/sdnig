@@ -1,9 +1,10 @@
 // 홈 대시보드 — 수집 진행률 (통합 / 웨딩·혼수 그룹별 / 그룹별 지역 진행률)
-// 목표치는 lib/dashboard-targets.ts (전국 웨딩업체·혼수업체 파악 엑셀 기반 정적 데이터)
+// 목표치는 lib/dashboard-targets.ts (전국 웨딩업체·혼수업체 파악 엑셀 기반 정적 데이터).
+// 앱의 14개 업종 전부가 두 그룹 중 하나에 배정되어 있어(기타/제외 카테고리 없음),
+// 등록된 업체는 목표 수치 유무와 무관하게 항상 해당 그룹·지역 집계에 반영된다.
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin-header';
 import { Button } from '@/components/ui/button';
-import { categoryLabel } from '@/lib/constants';
 import { TARGET_GROUPS, type TargetGroup } from '@/lib/dashboard-targets';
 import { SIDO_LIST, splitRegion } from '@/lib/regions';
 import { prisma } from '@/lib/prisma';
@@ -41,26 +42,8 @@ interface GroupStats {
 }
 
 export default async function DashboardPage() {
-  const targetCodes = TARGET_GROUPS.flatMap((g) => g.categories.map((c) => c.code));
-
-  const [rows, nonTargetGroups] = await Promise.all([
-    prisma.vendor.findMany({
-      where: { category: { in: targetCodes } },
-      select: { category: true, region: true },
-    }),
-    prisma.vendor.groupBy({
-      by: ['category'],
-      _count: { _all: true },
-      where: { category: { notIn: targetCodes } },
-    }),
-  ]);
-
-  // 목표 엑셀에 없는 업종(스냅, 영상, 부케 등)도 몇 건인지 업종별로 보여준다 —
-  // 예전에는 총 건수만 각주로 표시해 "등록했는데 왜 안 잡히지?"로 오해하기 쉬웠다.
-  const nonTargetStats = nonTargetGroups
-    .map((g) => ({ code: g.category, label: categoryLabel(g.category), count: g._count._all }))
-    .sort((a, b) => b.count - a.count);
-  const nonTargetTotal = nonTargetStats.reduce((s, c) => s + c.count, 0);
+  // 모든 업종이 두 그룹 중 하나에 속하므로 필터 없이 전체 업체를 집계한다.
+  const rows = await prisma.vendor.findMany({ select: { category: true, region: true } });
 
   // 등록 수 집계: 업종별 / 업종×시도별
   const regByCat = new Map<string, number>();
@@ -108,6 +91,10 @@ export default async function DashboardPage() {
   const totalTarget = groupStats.reduce((s, g) => s + g.target, 0);
   const totalRegistered = groupStats.reduce((s, g) => s + g.registered, 0);
   const totalPct = pctOf(totalRegistered, totalTarget);
+  const noTargetCategoryCount = groupStats.reduce(
+    (s, g) => s + g.categories.filter((c) => c.target === 0).length,
+    0
+  );
 
   return (
     <>
@@ -139,9 +126,15 @@ export default async function DashboardPage() {
           <div className="mt-4">
             <Meter value={totalPct} thick />
           </div>
+          {noTargetCategoryCount > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              14개 업종 중 {noTargetCategoryCount}개는 아직 목표 수치가 없어 등록 건수만 집계됩니다 (아래 업종별
+              내역에 &quot;목표 미설정&quot;으로 표시). 모든 업종의 등록은 이 통합 진행률에 빠짐없이 포함됩니다.
+            </p>
+          )}
         </section>
 
-        {/* 그룹별 진행률 (웨딩업체 / 혼수업체) */}
+        {/* 그룹별 진행률 (웨딩업체 / 혼수업체) — 각 그룹에 속한 업종 전부(목표 미설정 포함) 표시 */}
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           {groupStats.map(({ group, target, registered, categories }, gi) => {
             const p = pctOf(registered, target);
@@ -166,13 +159,24 @@ export default async function DashboardPage() {
                     const cp = pctOf(c.registered, c.target);
                     return (
                       <li key={c.code}>
-                        <div className="mb-1 flex items-baseline justify-between text-sm">
-                          <span>{c.label}</span>
-                          <span className="text-muted-foreground tabular-nums">
-                            {nf.format(c.registered)} / {nf.format(c.target)} · {pctLabel(cp)}
-                          </span>
-                        </div>
-                        <Meter value={cp} />
+                        <Link
+                          href={`/vendors?category=${c.code}`}
+                          className="block rounded-md transition-colors hover:bg-neutral-900/[0.03]"
+                        >
+                          <div className="mb-1 flex items-baseline justify-between text-sm">
+                            <span>{c.label}</span>
+                            {c.target > 0 ? (
+                              <span className="text-muted-foreground tabular-nums">
+                                {nf.format(c.registered)} / {nf.format(c.target)} · {pctLabel(cp)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground tabular-nums">
+                                {nf.format(c.registered)}건 · 목표 미설정
+                              </span>
+                            )}
+                          </div>
+                          {c.target > 0 && <Meter value={cp} />}
+                        </Link>
                       </li>
                     );
                   })}
@@ -198,10 +202,16 @@ export default async function DashboardPage() {
                     <li key={r.sido} className="flex items-center gap-3">
                       <span className="w-28 shrink-0 truncate text-sm">{r.sido}</span>
                       <div className="min-w-0 flex-1">
-                        <Meter value={rp} />
+                        {r.target > 0 ? (
+                          <Meter value={rp} />
+                        ) : (
+                          <div className="h-2 w-full rounded-full border border-dashed border-neutral-300" />
+                        )}
                       </div>
                       <span className="w-28 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                        {nf.format(r.registered)}/{nf.format(r.target)} · {pctLabel(rp)}
+                        {r.target > 0
+                          ? `${nf.format(r.registered)}/${nf.format(r.target)} · ${pctLabel(rp)}`
+                          : `${nf.format(r.registered)}건 · 목표 미설정`}
                       </span>
                     </li>
                   );
@@ -215,36 +225,6 @@ export default async function DashboardPage() {
             </section>
           ))}
         </div>
-
-        {nonTargetStats.length > 0 && (
-          <section className="card-surface animate-fade-up mt-4 p-6" style={{ animationDelay: '260ms' }}>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="font-semibold">
-                기타 업종 <span className="text-sm font-normal text-muted-foreground">(목표 미설정)</span>
-              </h2>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                총 {nf.format(nonTargetTotal)}건
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              아래 업종은 수집 목표 엑셀에 없어 위 진행률 계산에는 포함되지 않지만, 등록은 정상적으로 저장되어 있고
-              업체 리스트에서 그대로 확인·관리할 수 있습니다.
-            </p>
-            <ul className="mt-4 flex flex-wrap gap-2">
-              {nonTargetStats.map((c) => (
-                <li key={c.code}>
-                  <Link
-                    href={`/vendors?category=${c.code}`}
-                    className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 py-1.5 text-sm text-neutral-700 transition-all duration-200 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft"
-                  >
-                    <span>{c.label}</span>
-                    <span className="tabular-nums text-muted-foreground">{nf.format(c.count)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </main>
     </>
   );
