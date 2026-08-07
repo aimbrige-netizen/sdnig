@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin-header';
 import { Button } from '@/components/ui/button';
+import { categoryLabel } from '@/lib/constants';
 import { TARGET_GROUPS, type TargetGroup } from '@/lib/dashboard-targets';
 import { SIDO_LIST, splitRegion } from '@/lib/regions';
 import { prisma } from '@/lib/prisma';
@@ -42,13 +43,24 @@ interface GroupStats {
 export default async function DashboardPage() {
   const targetCodes = TARGET_GROUPS.flatMap((g) => g.categories.map((c) => c.code));
 
-  const [rows, nonTargetCount] = await Promise.all([
+  const [rows, nonTargetGroups] = await Promise.all([
     prisma.vendor.findMany({
       where: { category: { in: targetCodes } },
       select: { category: true, region: true },
     }),
-    prisma.vendor.count({ where: { category: { notIn: targetCodes } } }),
+    prisma.vendor.groupBy({
+      by: ['category'],
+      _count: { _all: true },
+      where: { category: { notIn: targetCodes } },
+    }),
   ]);
+
+  // 목표 엑셀에 없는 업종(스냅, 영상, 부케 등)도 몇 건인지 업종별로 보여준다 —
+  // 예전에는 총 건수만 각주로 표시해 "등록했는데 왜 안 잡히지?"로 오해하기 쉬웠다.
+  const nonTargetStats = nonTargetGroups
+    .map((g) => ({ code: g.category, label: categoryLabel(g.category), count: g._count._all }))
+    .sort((a, b) => b.count - a.count);
+  const nonTargetTotal = nonTargetStats.reduce((s, c) => s + c.count, 0);
 
   // 등록 수 집계: 업종별 / 업종×시도별
   const regByCat = new Map<string, number>();
@@ -204,11 +216,34 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        {nonTargetCount > 0 && (
-          <p className="mt-4 text-xs text-muted-foreground">
-            목표 산정에 포함되지 않는 업종(스냅, 영상, 부케 등) 등록 {nf.format(nonTargetCount)}건은 위
-            진행률에서 제외됩니다.
-          </p>
+        {nonTargetStats.length > 0 && (
+          <section className="card-surface animate-fade-up mt-4 p-6" style={{ animationDelay: '260ms' }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-semibold">
+                기타 업종 <span className="text-sm font-normal text-muted-foreground">(목표 미설정)</span>
+              </h2>
+              <span className="text-sm text-muted-foreground tabular-nums">
+                총 {nf.format(nonTargetTotal)}건
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              아래 업종은 수집 목표 엑셀에 없어 위 진행률 계산에는 포함되지 않지만, 등록은 정상적으로 저장되어 있고
+              업체 리스트에서 그대로 확인·관리할 수 있습니다.
+            </p>
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {nonTargetStats.map((c) => (
+                <li key={c.code}>
+                  <Link
+                    href={`/vendors?category=${c.code}`}
+                    className="flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3 py-1.5 text-sm text-neutral-700 transition-all duration-200 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft"
+                  >
+                    <span>{c.label}</span>
+                    <span className="tabular-nums text-muted-foreground">{nf.format(c.count)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </main>
     </>
