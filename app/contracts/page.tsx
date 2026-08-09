@@ -10,7 +10,8 @@ import type { Prisma } from '@prisma/client';
 import { AdminHeader } from '@/components/admin-header';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ContractEditDialog } from '@/components/contract-edit-dialog';
+import { CONTRACTS_HEADING_ID, ContractEditDialog } from '@/components/contract-edit-dialog';
+import { ContractResultStatus } from '@/components/contract-result-status';
 import { ContractListControls } from '@/components/contract-list-controls';
 import { ContractQuickAdd } from '@/components/contract-quick-add';
 import { CONTRACT_TYPES, contractTypeDot, contractTypeLabel, isInfoIncomplete } from '@/lib/contract-constants';
@@ -62,7 +63,7 @@ function StatTile({
 }) {
   return (
     <div className="px-5 py-4">
-      <div className="flex items-center gap-1.5">
+      <dt className="flex items-center gap-1.5">
         {dot && (
           <span
             aria-hidden
@@ -76,8 +77,8 @@ function StatTile({
           </span>
         )}
         <span className="truncate text-xs text-muted-foreground">{label}</span>
-      </div>
-      <div className="mt-1 text-3xl font-semibold tracking-tight">{nf.format(value)}</div>
+      </dt>
+      <dd className="mt-1 text-3xl font-semibold tracking-tight">{nf.format(value)}</dd>
     </div>
   );
 }
@@ -85,13 +86,16 @@ function StatTile({
 export default async function ContractsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; type?: string; sort?: string; incomplete?: string }>;
+  // 같은 키가 반복되면(?q=a&q=b) 값이 배열로 들어온다 — 문자열로 단정하면 .trim() 에서 500이 난다
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const q = (sp.q ?? '').trim().slice(0, 100);
-  const activeType = CONTRACT_TYPES.some((t) => t.code === sp.type) ? sp.type! : '';
-  const sort: ContractSort = sp.sort === 'name' ? 'name' : 'latest';
-  const onlyIncomplete = sp.incomplete === '1';
+  const first = (v: string | string[] | undefined): string => (Array.isArray(v) ? (v[0] ?? '') : (v ?? ''));
+  const q = first(sp.q).trim().slice(0, 100);
+  const typeParam = first(sp.type);
+  const activeType = CONTRACT_TYPES.some((t) => t.code === typeParam) ? typeParam : '';
+  const sort: ContractSort = first(sp.sort) === 'name' ? 'name' : 'latest';
+  const onlyIncomplete = first(sp.incomplete) === '1';
   const query: ContractQuery = { q, type: activeType, sort, incomplete: onlyIncomplete };
 
   // 검색어: 업체명·전화번호·주소·담당자 중 아무 곳이나 포함되면 매칭
@@ -155,7 +159,7 @@ export default async function ContractsPage({
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="animate-fade-up mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold tracking-tight">
+            <h1 id={CONTRACTS_HEADING_ID} tabIndex={-1} className="text-xl font-bold tracking-tight outline-none">
               계약 업체 DB{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">{nf.format(matchingTotal)}곳</span>
             </h1>
@@ -215,6 +219,7 @@ export default async function ContractsPage({
               <Link
                 key={c.code || 'all'}
                 href={buildContractsUrl(query, { type: c.code })}
+                aria-current={isActive ? 'true' : undefined}
                 className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all duration-200 ${
                   isActive
                     ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
@@ -225,7 +230,7 @@ export default async function ContractsPage({
                   <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: c.dot }} />
                 )}
                 {c.label}
-                <span className={`text-xs tabular-nums ${isActive ? 'text-white/60' : 'text-neutral-400'}`}>
+                <span className={`text-xs tabular-nums ${isActive ? 'text-white/75' : 'text-neutral-500'}`}>
                   {count}
                 </span>
               </Link>
@@ -234,6 +239,11 @@ export default async function ContractsPage({
         </div>
 
         <ContractListControls query={query} />
+        <ContractResultStatus
+          count={matchingTotal}
+          filterDesc={filterDesc}
+          truncated={vendors.length >= MAX_ROWS}
+        />
 
         {vendors.length === 0 ? (
           <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-16 text-center">
@@ -241,7 +251,7 @@ export default async function ContractsPage({
               {filterDesc ? `${filterDesc} 조건에 해당하는 업체가 없습니다.` : '아직 등록된 계약 업체가 없습니다.'}
             </p>
             {!filterDesc && (
-              <p className="mt-1.5 text-sm text-neutral-400">
+              <p className="mt-1.5 text-sm text-muted-foreground">
                 위의 &lsquo;업체 빠르게 추가&rsquo;를 펼쳐 업체명과 담당자만으로 등록할 수 있습니다.
               </p>
             )}
@@ -278,7 +288,7 @@ export default async function ContractsPage({
                             <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
                             <span
                               aria-hidden
-                              className="text-xs text-neutral-400 transition-colors group-hover/edit:text-[var(--brand-to)]"
+                              className="text-xs text-neutral-500 transition-colors group-hover/edit:text-[var(--brand-to)]"
                             >
                               ✎
                             </span>

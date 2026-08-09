@@ -19,6 +19,12 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // 로그인 화면·로그인 API·정적 자산·로컬 업로드 파일은 인증 제외
-  matcher: ['/((?!login|api/auth/login|uploads/|_next/|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)'],
+  matcher: [
+    // API는 확장자 예외 없이 항상 인증 검사.
+    // 아래 페이지용 패턴의 이미지 확장자 예외는 "확장자로 끝나는 모든 경로"에 걸리기 때문에
+    // /api/contracts/1.png 같은 요청이 인증을 건너뛰고 라우트 핸들러까지 도달할 수 있다.
+    '/api/((?!auth/login).*)',
+    // 페이지: 로그인 화면·정적 자산·로컬 업로드 파일은 인증 제외
+    '/((?!login|api/|uploads/|_next/|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)',
+  ],
 };

@@ -184,6 +184,14 @@
     0 4px 16px rgb(16 24 40 / 0.06);
 }
 
+/* input[type=search] 의 Safari/Chrome 기본 취소 버튼 숨김 —
+   직접 만든 지우기 버튼과 같은 자리에 두 개가 겹쳐 보이는 것을 막는다. */
+.no-native-clear::-webkit-search-cancel-button,
+.no-native-clear::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* 진입 모션 — 아래에서 살짝 떠오르며 페이드인 */
 @keyframes fade-up {
   from {

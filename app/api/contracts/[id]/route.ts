@@ -3,10 +3,15 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { contractPayloadSchema } from '@/lib/contract-schema';
 
+// Postgres int4 상한 — 이 범위를 넘겨 Prisma 로 내려보내면 P2025 가 아닌 변환 오류가 나서
+// 아래 catch 를 그대로 통과해 500 이 된다. 숫자 표기(지수·16진)도 Number() 는 받아주므로 함께 막는다.
+const MAX_INT4 = 2147483647;
+
 async function parseId(params: Promise<{ id: string }>): Promise<number | null> {
   const { id } = await params;
+  if (!/^\d+$/.test(id)) return null;
   const numId = Number(id);
-  return Number.isInteger(numId) && numId > 0 ? numId : null;
+  return Number.isInteger(numId) && numId > 0 && numId <= MAX_INT4 ? numId : null;
 }
 
 // 계약 업체 수정

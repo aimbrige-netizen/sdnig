@@ -1,6 +1,7 @@
 'use client';
 
 // 계약 업체 입력 필드 묶음 — 빠른 등록 폼과 수정 다이얼로그가 같은 필드를 공유합니다.
+import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/vendor-form/native-select';
@@ -38,11 +39,25 @@ export const CONTRACT_FIELD_LABELS: Record<string, string> = {
   managerName: 'DB담당자',
 };
 
-function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+// htmlFor/id 로 라벨과 입력을 반드시 연결한다. 연결이 없으면 스크린리더가 칸 이름을 못 읽고,
+// 라벨을 클릭해도 포커스가 가지 않는다. 필수 표시도 별표(시각) + aria-required(보조기기) 양쪽으로 준다.
+function FieldLabel({
+  htmlFor,
+  children,
+  required,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+  required?: boolean;
+}) {
   return (
-    <Label className="text-xs font-medium text-muted-foreground">
+    <Label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
       {children}
-      {required && <span className="ml-0.5 text-destructive">*</span>}
+      {required && (
+        <span className="ml-0.5 text-destructive" aria-hidden>
+          *
+        </span>
+      )}
     </Label>
   );
 }
@@ -60,6 +75,10 @@ interface ContractFieldsProps {
 }
 
 export function ContractFields({ state, patch, onEnter, nameRef, disabled, className }: ContractFieldsProps) {
+  // 이 컴포넌트는 빠른등록 폼과 수정 다이얼로그에서 동시에 렌더될 수 있으므로 id 가 겹치면 안 된다
+  const uid = useId();
+  const id = (field: string) => `${uid}-${field}`;
+
   const handleKeyDown = onEnter
     ? (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -72,8 +91,12 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
   return (
     <div className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6', className)}>
       <div className="space-y-1 lg:col-span-2">
-        <FieldLabel required>업체명</FieldLabel>
+        <FieldLabel htmlFor={id('name')} required>
+          업체명
+        </FieldLabel>
         <Input
+          id={id('name')}
+          aria-required
           ref={nameRef}
           value={state.name}
           onChange={(e) => patch({ name: e.target.value })}
@@ -84,9 +107,12 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
       </div>
 
       <div className="space-y-1">
-        <FieldLabel required>계약 형태</FieldLabel>
+        <FieldLabel htmlFor={id('type')} required>
+          계약 형태
+        </FieldLabel>
         <NativeSelect
-          aria-label="계약 형태"
+          id={id('type')}
+          aria-required
           value={state.contractType}
           onChange={(e) => patch({ contractType: e.target.value as ContractType })}
           options={CONTRACT_TYPES.map((t) => ({ value: t.code, label: t.label }))}
@@ -96,8 +122,9 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
       </div>
 
       <div className="space-y-1">
-        <FieldLabel>전화번호</FieldLabel>
+        <FieldLabel htmlFor={id('phone')}>전화번호</FieldLabel>
         <Input
+          id={id('phone')}
           type="tel"
           value={state.phone}
           onChange={(e) => patch({ phone: e.target.value })}
@@ -108,8 +135,9 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
       </div>
 
       <div className="space-y-1">
-        <FieldLabel>주소</FieldLabel>
+        <FieldLabel htmlFor={id('address')}>주소</FieldLabel>
         <Input
+          id={id('address')}
           value={state.address}
           onChange={(e) => patch({ address: e.target.value })}
           onKeyDown={handleKeyDown}
@@ -119,8 +147,12 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
       </div>
 
       <div className="space-y-1">
-        <FieldLabel required>DB담당자</FieldLabel>
+        <FieldLabel htmlFor={id('manager')} required>
+          DB담당자
+        </FieldLabel>
         <Input
+          id={id('manager')}
+          aria-required
           value={state.managerName}
           onChange={(e) => patch({ managerName: e.target.value })}
           onKeyDown={handleKeyDown}

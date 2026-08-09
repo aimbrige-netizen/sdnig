@@ -61,8 +61,9 @@ export function ContractListControls({ query }: { query: ContractQuery }) {
           placeholder="업체명·전화번호·주소·담당자 검색"
           aria-label="계약 업체 검색"
           className={cn(
-            'h-9 w-64 rounded-md border border-input bg-white pl-3 pr-8 text-sm shadow-xs transition-colors',
-            'placeholder:text-neutral-400',
+            // no-native-clear: Safari 기본 취소 버튼이 커스텀 × 와 겹쳐 보이는 것을 막는다 (globals.css)
+            'no-native-clear h-9 w-64 rounded-md border border-input bg-white pl-3 pr-9 text-sm shadow-xs transition-colors',
+            'placeholder:text-neutral-500',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
           )}
         />
@@ -74,7 +75,8 @@ export function ContractListControls({ query }: { query: ContractQuery }) {
               setText('');
               submit('');
             }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded text-neutral-400 hover:text-neutral-700"
+            // 글리프 하나만 두면 터치 타깃이 8×20px 밖에 안 된다 — 최소 24×24 확보
+            className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900"
           >
             ×
           </button>

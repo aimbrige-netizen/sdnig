@@ -26,6 +26,7 @@ export function ContractQuickAdd() {
   // (setSaving(false) 와 같은 커밋에 묶이므로 effect 시점엔 disabled 가 이미 풀려 있다)
   const [refocus, setRefocus] = useState(0);
   const nameRef = useRef<HTMLInputElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   const patch = (partial: Partial<ContractFormState>) => setState((prev) => ({ ...prev, ...partial }));
 
@@ -36,8 +37,13 @@ export function ContractQuickAdd() {
   function toggle() {
     const next = !open;
     setOpen(next);
-    if (next) setTimeout(() => nameRef.current?.focus(), 220);
-    else setErrors([]);
+    if (next) {
+      setTimeout(() => nameRef.current?.focus(), 220);
+    } else {
+      setErrors([]);
+      // 닫으면 패널 내부가 inert 가 되므로, 포커스를 토글 버튼으로 되돌려 위치를 잃지 않게 한다
+      toggleRef.current?.focus();
+    }
   }
 
   async function handleSave() {
@@ -87,6 +93,7 @@ export function ContractQuickAdd() {
   return (
     <section className="card-surface animate-fade-up mb-4 overflow-hidden" style={{ animationDelay: '90ms' }}>
       <button
+        ref={toggleRef}
         type="button"
         onClick={toggle}
         aria-expanded={open}
@@ -117,10 +124,15 @@ export function ContractQuickAdd() {
           open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
-        <div className="overflow-hidden">
+        {/* 접혀 있을 때는 높이만 0 일 뿐 내부 컨트롤이 그대로 포커스 가능하므로,
+            inert 로 탭 순서와 접근성 트리에서 함께 제외한다 (aria-expanded 와도 일치) */}
+        <div className="overflow-hidden" inert={!open}>
           <div className="border-t px-5 py-4">
             {errors.length > 0 && (
-              <div className="mb-3 rounded-lg border border-destructive/40 bg-red-50 p-2.5 text-xs text-destructive">
+              <div
+                role="alert"
+                className="mb-3 rounded-lg border border-destructive/40 bg-red-50 p-2.5 text-xs text-destructive"
+              >
                 <ul className="list-inside list-disc space-y-0.5">
                   {errors.map((msg) => (
                     <li key={msg}>{msg}</li>
