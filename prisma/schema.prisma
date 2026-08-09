@@ -8,6 +8,21 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+/// 계약 업체 DB — 구두/서면 계약만 맺고 상세 정보를 아직 못 받은 업체 명단.
+/// Vendor(정식 입점 업체)와 별개로, 최소 정보만 빠르게 쌓아두기 위한 테이블입니다.
+model ContractedVendor {
+  id           Int      @id @default(autoincrement())
+  name         String // 업체명
+  contractType String // written(계약서 작성) | verbal(구두 계약만)
+  phone        String? // 전화번호 — 아직 못 받은 곳이 많아 선택 입력
+  address      String? // 주소 — 아직 못 받은 곳이 많아 선택 입력
+  managerName  String? // DB담당자 (필수 입력, app 레벨에서 검증)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("contracted_vendors")
+}
+
 model Vendor {
   id                 Int      @id @default(autoincrement())
   category           String // wedding_hall, studio, dress ... (기획서 3절 14종 고정값)

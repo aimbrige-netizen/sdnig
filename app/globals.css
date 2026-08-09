@@ -81,6 +81,18 @@
   /* 브랜드 그라데이션 — 스딩 로고 오렌지 */
   --brand-from: oklch(0.74 0.18 47);
   --brand-to: oklch(0.66 0.22 34);
+  /* 미터 트랙 — 채워진 브랜드 색과 "같은 램프의 옅은 단계" (중립 회색이 아니라)
+     여야 막대 전체에서 상태가 하나로 읽힙니다. */
+  --meter-track: oklch(0.94 0.045 45);
+  /* 데이터 식별 색 (계약 형태) — dataviz 검증 통과 슬롯.
+     validate_palette.js light/#ffffff 기준 all-pairs CVD ΔE 24.7 · 일반시야 33.6 · 대비 3:1↑
+     텍스트에는 절대 입히지 않고, 글자 옆의 점(mark)에만 사용합니다. */
+  --data-contract-written: #2a78d6;
+  --data-contract-verbal: #eb6834;
+  /* 상태색(경고) — 아이콘+라벨과 항상 함께 쓰며 색 단독으로 의미를 나르지 않습니다.
+     흰 배경에서 원색은 대비가 낮아, 칩은 옅은 배경 + 진한 잉크 조합으로 대비를 확보합니다. */
+  --data-warning-tint: #fffbeb;
+  --data-warning-ink: #b45309; /* tint 위 4.84:1, 카드 위 5.02:1 */
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
