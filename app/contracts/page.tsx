@@ -15,7 +15,7 @@ import { ContractResultStatus } from '@/components/contract-result-status';
 import { ContractListControls } from '@/components/contract-list-controls';
 import { ContractQuickAdd } from '@/components/contract-quick-add';
 import { CONTRACT_TYPES, contractTypeDot, contractTypeLabel, isInfoIncomplete } from '@/lib/contract-constants';
-import { buildContractsUrl, type ContractQuery, type ContractSort } from '@/lib/contract-query';
+import { type ContractQuery, type ContractSort } from '@/lib/contract-query';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -147,7 +147,16 @@ export default async function ContractsPage({
   // '정보 미비만 보기' 상태에서는 완성도가 정의상 0% 라 아무 정보도 주지 못하므로 감춘다
   const showMeter = !onlyIncomplete;
 
-  const chips = [{ code: '', label: '전체', dot: '' }, ...CONTRACT_TYPES.map((t) => ({ code: t.code as string, label: t.label, dot: t.dotVar }))];
+  // 칩 카운트는 서버에서 계산해 넘긴다 (필터 조작은 클라이언트 컨트롤이 일괄 처리)
+  const chips = [
+    { code: '', label: '전체', dot: '', count: scopeTotal },
+    ...CONTRACT_TYPES.map((t) => ({
+      code: t.code as string,
+      label: t.label,
+      dot: t.dotVar,
+      count: countByType.get(t.code) ?? 0,
+    })),
+  ];
 
   const filterDesc = [q ? `"${q}" 검색` : '', activeType ? contractTypeLabel(activeType) : '', onlyIncomplete ? '정보 미비' : '']
     .filter(Boolean)
@@ -210,35 +219,7 @@ export default async function ContractsPage({
 
         <ContractQuickAdd />
 
-        {/* 계약 형태 필터 칩 */}
-        <div className="animate-fade-up mb-3 flex flex-wrap gap-2" style={{ animationDelay: '120ms' }}>
-          {chips.map((c) => {
-            const isActive = c.code === activeType;
-            const count = c.code ? (countByType.get(c.code) ?? 0) : scopeTotal;
-            return (
-              <Link
-                key={c.code || 'all'}
-                href={buildContractsUrl(query, { type: c.code })}
-                aria-current={isActive ? 'true' : undefined}
-                className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all duration-200 ${
-                  isActive
-                    ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
-                    : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
-                }`}
-              >
-                {c.dot && (
-                  <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: c.dot }} />
-                )}
-                {c.label}
-                <span className={`text-xs tabular-nums ${isActive ? 'text-white/75' : 'text-neutral-500'}`}>
-                  {count}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-
-        <ContractListControls query={query} />
+        <ContractListControls query={query} chips={chips} />
         <ContractResultStatus
           count={matchingTotal}
           filterDesc={filterDesc}

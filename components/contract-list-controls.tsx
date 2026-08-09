@@ -1,111 +1,186 @@
 'use client';
 
-// 계약 업체 리스트 상단 컨트롤 — 검색, 정렬, "정보 미비만 보기" 토글.
-// 필터는 리스트 위 한 줄에 모아 두고, 상태는 URL 쿼리로 반영합니다 (서버 컴포넌트가 다시 조회).
-import { useEffect, useState } from 'react';
+// 계약 업체 리스트 상단 필터 — 계약형태 칩, 검색, 정렬, "정보 미비만 보기" 토글.
+//
+// 필터를 전부 이 한 컴포넌트에 모아 둔 이유:
+// 검색어는 300ms 디바운스 뒤 URL 에 반영되는데, 그 사이 사용자가 다른 필터를 누르면
+// 대기 중이던 타이머가 "누르기 전"의 필터 상태로 URL 을 덮어써 방금 누른 필터가 사라진다.
+// props(query)는 서버 응답이 커밋된 뒤에야 갱신되므로 useEffect 의존성만으로는 못 막는다
+// (내비게이션이 진행 중인 수백 ms 동안 props 가 그대로라 cleanup 이 돌지 않는다).
+// 그래서 모든 필터 조작을 navigate() 하나로 통과시켜 대기 타이머를 직접 취소하고,
+// 그때 입력돼 있던 검색어를 같은 URL 에 함께 실어 보낸다.
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { NativeSelect } from '@/components/vendor-form/native-select';
 import { buildContractsUrl, type ContractQuery, type ContractSort } from '@/lib/contract-query';
 import { cn } from '@/lib/utils';
 
-export function ContractListControls({ query }: { query: ContractQuery }) {
+export interface ContractChip {
+  code: string;
+  label: string;
+  dot: string;
+  count: number;
+}
+
+interface ContractListControlsProps {
+  query: ContractQuery;
+  chips: ContractChip[];
+}
+
+function sigOf(q: ContractQuery): string {
+  return JSON.stringify([q.q, q.type, q.sort, q.incomplete]);
+}
+
+export function ContractListControls({ query, chips }: ContractListControlsProps) {
   const router = useRouter();
   const [text, setText] = useState(query.q);
-  // 우리가 방금 URL로 밀어넣었고 아직 반영을 기다리는 검색어.
-  // "내가 보낸 것이 돌아온 것"과 "밖에서 URL이 바뀐 것"을 구분하는 용도다.
-  // 값이 아니라 '대기 중인지'로 구분해야, 뒤로/앞으로가기로 예전과 같은 검색어에
-  // 다시 도달했을 때도 입력창이 제대로 따라간다.
-  const [pendingSend, setPendingSend] = useState<string | null>(null);
-  const [syncedQ, setSyncedQ] = useState(query.q);
+  // 사용자가 마지막으로 "요청한" 필터 상태. 서버 응답이 커밋되기 전까지 props(query)는
+  // 옛 값이라, 그 사이의 조작은 이 intent 위에 쌓아야 서로를 덮어쓰지 않는다.
+  // (null = 서버와 동기화된 상태)
+  const [intent, setIntent] = useState<ContractQuery | null>(null);
+  const [syncedSig, setSyncedSig] = useState(() => sigOf(query));
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 칩 클릭·뒤로가기 등 외부 요인으로 URL의 q가 바뀐 경우에만 입력값을 맞춘다.
-  // (effect 가 아니라 렌더 중 조정 — React 권장 패턴이라 불필요한 연쇄 렌더가 없다)
-  if (query.q !== syncedQ) {
-    setSyncedQ(query.q);
-    if (pendingSend !== null && query.q === pendingSend) {
-      // 내가 보낸 값이 그대로 돌아왔다 — 그 사이 더 친 글자를 덮어쓰지 않는다
-      setPendingSend(null);
+  // 화면과 다음 내비게이션의 기준 — 서버가 아직 못 따라왔으면 사용자의 의도를 우선한다.
+  // (덤으로 느린 응답에서도 칩·정렬·토글이 즉시 반응하는 낙관적 UI가 된다)
+  const effective = intent ?? query;
+
+  // 서버 상태가 실제로 바뀌었을 때만 조정 (effect 가 아니라 렌더 중 조정 — React 권장 패턴)
+  const querySig = sigOf(query);
+  if (querySig !== syncedSig) {
+    setSyncedSig(querySig);
+    if (intent && sigOf(intent) === querySig) {
+      setIntent(null); // 우리가 보낸 것이 그대로 도착 — 입력창은 건드리지 않는다
     } else {
-      setPendingSend(null);
+      // 뒤로/앞으로가기 등 외부 요인 → 서버 상태를 따른다
+      setIntent(null);
       setText(query.q);
     }
   }
 
-  function submit(value: string) {
-    setPendingSend(value.trim());
-    router.replace(buildContractsUrl(query, { q: value }));
+  function cancelPending() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
   }
 
-  // 검색어는 입력을 멈추면 300ms 후 자동 반영 (히스토리 오염 방지를 위해 replace)
-  //
-  // 의존성에 query 의 각 필드를 모두 넣어야 한다. [text] 만 두면 대기 중인 타이머가
-  // 타이머를 걸던 시점의 낡은 query 를 그대로 들고 있다가, 그 사이 사용자가 누른
-  // 정렬/칩/정보미비 토글을 300ms 뒤에 조용히 되돌려버린다.
+  function go(changes: Partial<ContractQuery>, replace: boolean) {
+    cancelPending();
+    const next: ContractQuery = { ...effective, ...changes };
+    setIntent(next);
+    const url = buildContractsUrl(next, {});
+    if (replace) router.replace(url);
+    else router.push(url);
+  }
+
+  /** 검색어만 반영 (히스토리 오염 방지를 위해 replace) */
+  const submitSearch = (value: string) => go({ q: value.trim() }, true);
+
+  /** 칩·정렬·토글 — 대기 중인 검색 디바운스를 취소하고 현재 검색어를 함께 실어 보낸다 */
+  const navigate = (changes: Partial<ContractQuery>) => go({ q: text.trim(), ...changes }, false);
+
+  // 검색어는 입력을 멈추면 300ms 후 자동 반영
   useEffect(() => {
-    if (text.trim() === query.q) return;
-    const t = setTimeout(() => submit(text), 300);
-    return () => clearTimeout(t);
+    if (text.trim() === effective.q) return;
+    timerRef.current = setTimeout(() => submitSearch(text), 300);
+    return cancelPending;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, query.q, query.type, query.sort, query.incomplete]);
+  }, [text, effective.q]);
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
-      <div className="relative">
-        <input
-          type="search"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit(text);
-          }}
-          placeholder="업체명·전화번호·주소·담당자 검색"
-          aria-label="계약 업체 검색"
-          className={cn(
-            // no-native-clear: Safari 기본 취소 버튼이 커스텀 × 와 겹쳐 보이는 것을 막는다 (globals.css)
-            'no-native-clear h-9 w-64 rounded-md border border-input bg-white pl-3 pr-9 text-sm shadow-xs transition-colors',
-            'placeholder:text-neutral-500',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
-          )}
-        />
-        {text && (
-          <button
-            type="button"
-            aria-label="검색어 지우기"
-            onClick={() => {
-              setText('');
-              submit('');
-            }}
-            // 글리프 하나만 두면 터치 타깃이 8×20px 밖에 안 된다 — 최소 24×24 확보
-            className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900"
-          >
-            ×
-          </button>
-        )}
+    <div className="mb-4 space-y-3">
+      {/* 계약 형태 칩 — Link 지만 클릭은 navigate() 로 가로채 대기 중인 검색을 함께 정리한다.
+          (href 는 그대로 두어 새 탭 열기·주소 복사 같은 기본 동작을 유지) */}
+      <div className="animate-fade-up flex flex-wrap gap-2" style={{ animationDelay: '120ms' }}>
+        {chips.map((c) => {
+          const isActive = c.code === effective.type;
+          return (
+            <Link
+              key={c.code || 'all'}
+              href={buildContractsUrl(effective, { q: text, type: c.code })}
+              aria-current={isActive ? 'true' : undefined}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 새 탭 등은 기본 동작
+                e.preventDefault();
+                navigate({ type: c.code });
+              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all duration-200',
+                isActive
+                  ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
+                  : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
+              )}
+            >
+              {c.dot && <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: c.dot }} />}
+              {c.label}
+              <span className={cn('text-xs tabular-nums', isActive ? 'text-white/75' : 'text-neutral-500')}>
+                {c.count}
+              </span>
+            </Link>
+          );
+        })}
       </div>
 
-      <NativeSelect
-        aria-label="정렬"
-        options={[
-          { value: 'latest', label: '최신순' },
-          { value: 'name', label: '이름순' },
-        ]}
-        value={query.sort}
-        onChange={(e) => router.push(buildContractsUrl(query, { sort: e.target.value as ContractSort }))}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <input
+            type="search"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitSearch(text);
+            }}
+            placeholder="업체명·전화번호·주소·담당자 검색"
+            aria-label="계약 업체 검색"
+            className={cn(
+              // no-native-clear: Safari 기본 취소 버튼이 커스텀 × 와 겹쳐 보이는 것을 막는다 (globals.css)
+              'no-native-clear h-9 w-64 rounded-md border border-input bg-white pl-3 pr-9 text-sm shadow-xs transition-colors',
+              'placeholder:text-neutral-500',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
+            )}
+          />
+          {text && (
+            <button
+              type="button"
+              aria-label="검색어 지우기"
+              onClick={() => {
+                setText('');
+                submitSearch('');
+              }}
+              // 글리프 하나만 두면 터치 타깃이 8×20px 밖에 안 된다 — 최소 24×24 확보
+              className="absolute right-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900"
+            >
+              ×
+            </button>
+          )}
+        </div>
 
-      <button
-        type="button"
-        aria-pressed={query.incomplete}
-        onClick={() => router.push(buildContractsUrl(query, { incomplete: !query.incomplete }))}
-        className={cn(
-          'h-9 rounded-full border px-3.5 text-sm transition-all duration-200',
-          query.incomplete
-            ? 'border-transparent bg-[var(--data-warning-ink)] font-medium text-white shadow-sm'
-            : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
-        )}
-      >
-        정보 미비만 보기
-      </button>
+        <NativeSelect
+          aria-label="정렬"
+          options={[
+            { value: 'latest', label: '최신순' },
+            { value: 'name', label: '이름순' },
+          ]}
+          value={effective.sort}
+          onChange={(e) => navigate({ sort: e.target.value as ContractSort })}
+        />
+
+        <button
+          type="button"
+          aria-pressed={effective.incomplete}
+          onClick={() => navigate({ incomplete: !effective.incomplete })}
+          className={cn(
+            'h-9 rounded-full border px-3.5 text-sm transition-all duration-200',
+            effective.incomplete
+              ? 'border-transparent bg-[var(--data-warning-ink)] font-medium text-white shadow-sm'
+              : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
+          )}
+        >
+          정보 미비만 보기
+        </button>
+      </div>
     </div>
   );
 }
