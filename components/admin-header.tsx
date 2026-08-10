@@ -48,6 +48,10 @@ export function AdminHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  /* 현재 페이지를 가리키는 링크는 프리페치하지 않는다.
+                     저장(서버 액션)으로 갱신된 화면을, 뒤늦게 도착한 "저장 전" 프리페치
+                     응답이 덮어써 목록이 갱신되지 않는 문제가 있었다. */
+                  prefetch={isActive ? false : undefined}
                   ref={isActive ? activeRef : undefined}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(

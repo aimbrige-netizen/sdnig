@@ -137,6 +137,18 @@ export function emptyCategoryData(category: CategoryCode): CategoryDataState {
   return state;
 }
 
+/** 계약 업체 DB에서 넘겨받아 미리 채울 값 (같은 정보를 두 번 입력하지 않기 위함) */
+export interface VendorPrefill {
+  name: string;
+  contact: string;
+  address: string;
+  regionSido: string;
+  regionGugun: string;
+  authorName: string;
+  /** 참고용 메모 — 폼에 저장되지 않고 화면에만 보여줍니다 */
+  memo: string;
+}
+
 export function initialFormState(): VendorFormState {
   return {
     name: '',
@@ -335,6 +347,18 @@ export function serializeForm(state: VendorFormState): VendorPayloadInput {
     categoryData: category ? serializeCategoryData(category, categoryState) : {},
     photos,
   };
+}
+
+/** 계약 업체 DB에서 가져온 값 → 폼 초기 상태 (등록 화면) */
+export function formStateFromPrefill(prefill: VendorPrefill): VendorFormState {
+  const state = initialFormState();
+  state.name = prefill.name;
+  state.contact = prefill.contact;
+  state.address = prefill.address;
+  state.regionSido = prefill.regionSido;
+  state.regionGugun = prefill.regionGugun;
+  state.authorName = prefill.authorName;
+  return state;
 }
 
 /** DB 레코드(DTO) → 폼 상태 (수정 화면 초기값) */

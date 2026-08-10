@@ -126,3 +126,46 @@ export function splitRegion(region: string | null | undefined): { sido: string; 
 export function joinRegion(sido: string, gugun: string): string {
   return gugun ? `${sido} ${gugun}` : sido;
 }
+
+/** 시/도 축약 표기 → 정식 명칭 (예: "서울" → "서울특별시") */
+const SIDO_SHORT: Record<string, string> = {
+  서울: '서울특별시',
+  부산: '부산광역시',
+  대구: '대구광역시',
+  인천: '인천광역시',
+  광주: '광주광역시',
+  대전: '대전광역시',
+  울산: '울산광역시',
+  세종: '세종특별자치시',
+  경기: '경기도',
+  강원: '강원특별자치도',
+  충북: '충청북도',
+  충남: '충청남도',
+  전북: '전북특별자치도',
+  전남: '전라남도',
+  경북: '경상북도',
+  경남: '경상남도',
+  제주: '제주특별자치도',
+};
+
+/**
+ * 자유 입력 주소에서 시/도·구/군을 최대한 추출한다.
+ * 계약 업체 DB에 적어둔 주소를 업체 등록 폼의 지역 선택으로 옮길 때 사용.
+ * 못 찾으면 빈 문자열을 돌려주고, 사용자가 직접 고르면 된다.
+ */
+export function parseRegionFromAddress(address: string | null | undefined): { sido: string; gugun: string } {
+  const text = (address ?? '').trim();
+  if (!text) return { sido: '', gugun: '' };
+
+  let sido = SIDO_LIST.find((s) => text.startsWith(s)) ?? '';
+  if (!sido) {
+    const short = Object.keys(SIDO_SHORT).find((s) => text.startsWith(s));
+    if (short) sido = SIDO_SHORT[short];
+  }
+  if (!sido) return { sido: '', gugun: '' };
+
+  // 구/군은 이름이 긴 것부터 확인해야 "북구"가 "강북구"보다 먼저 걸리지 않는다
+  const gugun =
+    [...gugunsOf(sido)].sort((a, b) => b.length - a.length).find((g) => text.includes(g)) ?? '';
+  return { sido, gugun };
+}

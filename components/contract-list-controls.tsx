@@ -92,7 +92,10 @@ export function ContractListControls({ query, chips }: ContractListControlsProps
   return (
     <div className="mb-4 space-y-3">
       {/* 계약 형태 칩 — Link 지만 클릭은 navigate() 로 가로채 대기 중인 검색을 함께 정리한다.
-          (href 는 그대로 두어 새 탭 열기·주소 복사 같은 기본 동작을 유지) */}
+          (href 는 그대로 두어 새 탭 열기·주소 복사 같은 기본 동작을 유지)
+          prefetch={false} 인 이유: 이 칩들은 현재 페이지와 같은 경로(/contracts)를 가리켜,
+          프리페치 응답이 저장 직후 갱신된 목록을 "저장 전" 스냅샷으로 덮어쓴다.
+          클릭은 어차피 onClick 이 가로채므로 프리페치의 이점도 없다. */}
       <div className="animate-fade-up flex flex-wrap gap-2" style={{ animationDelay: '120ms' }}>
         {chips.map((c) => {
           const isActive = c.code === effective.type;
@@ -100,6 +103,7 @@ export function ContractListControls({ query, chips }: ContractListControlsProps
             <Link
               key={c.code || 'all'}
               href={buildContractsUrl(effective, { q: text, type: c.code })}
+              prefetch={false}
               aria-current={isActive ? 'true' : undefined}
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 새 탭 등은 기본 동작

@@ -10,7 +10,7 @@ import type { Prisma } from '@prisma/client';
 import { AdminHeader } from '@/components/admin-header';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CONTRACTS_HEADING_ID, ContractEditDialog } from '@/components/contract-edit-dialog';
+import { CONTRACTS_HEADING_ID, ContractDetailDialog } from '@/components/contract-detail-dialog';
 import { ContractResultStatus } from '@/components/contract-result-status';
 import { ContractListControls } from '@/components/contract-list-controls';
 import { ContractQuickAdd } from '@/components/contract-quick-add';
@@ -262,11 +262,11 @@ export default async function ContractsPage({
                       style={{ animationDelay: `${180 + Math.min(i, 14) * 25}ms` }}
                     >
                       <TableCell>
-                        <ContractEditDialog vendor={v}>
+                        <ContractDetailDialog vendor={{ ...v, createdAt: v.createdAt.toISOString() }}>
                           <button
                             type="button"
                             className="group/edit flex items-center gap-1.5 rounded text-left font-medium transition-colors hover:text-[var(--brand-to)]"
-                            title="눌러서 수정"
+                            title="눌러서 상세 보기"
                           >
                             <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
                             <span
@@ -275,9 +275,9 @@ export default async function ContractsPage({
                             >
                               ✎
                             </span>
-                            <span className="sr-only">수정</span>
+                            <span className="sr-only">상세 보기</span>
                           </button>
-                        </ContractEditDialog>
+                        </ContractDetailDialog>
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">

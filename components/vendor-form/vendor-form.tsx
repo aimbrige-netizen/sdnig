@@ -12,13 +12,17 @@ import { CategoryFieldsForm } from './category-fields-form';
 import { CommonFieldsForm } from './common-fields-form';
 import {
   emptyCategoryData,
+  formStateFromPrefill,
   formStateFromVendor,
   initialFormState,
   serializeForm,
   type VendorDTO,
   type VendorFormState,
+  type VendorPrefill,
 } from './form-state';
 import { MainPhotoField, PhotoListField } from './photo-uploader';
+import { BrandLoaderOverlay } from '@/components/brand-loader';
+import { deleteContract } from '@/app/contracts/actions';
 
 // zod 이슈 경로 → 한글 필드명 (에러 요약 표시용)
 const FIELD_LABELS: Record<string, string> = {
@@ -61,13 +65,17 @@ const FIELD_TAB: Record<string, TabKey> = {
 
 interface VendorFormProps {
   vendor?: VendorDTO; // 있으면 수정 모드
+  /** 계약 업체 DB에서 넘어온 미리 채움 값 (등록 모드) */
+  prefill?: VendorPrefill;
+  /** 이 업체를 저장하면 삭제할 계약 DB 항목 id */
+  fromContractId?: number;
 }
 
-export function VendorForm({ vendor }: VendorFormProps) {
+export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps) {
   const router = useRouter();
   const isEdit = !!vendor;
   const [state, setState] = useState<VendorFormState>(() =>
-    vendor ? formStateFromVendor(vendor) : initialFormState()
+    vendor ? formStateFromVendor(vendor) : prefill ? formStateFromPrefill(prefill) : initialFormState()
   );
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -116,6 +124,11 @@ export function VendorForm({ vendor }: VendorFormProps) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // 계약 업체 DB에서 넘어온 건이면, 업체 정보가 완성됐으므로 그 항목을 지운다.
+      // 삭제가 실패해도 업체 저장은 이미 끝났으므로 흐름을 막지 않는다.
+      if (fromContractId) {
+        await deleteContract(fromContractId).catch(() => null);
+      }
       router.push('/vendors');
       router.refresh();
     } catch {
@@ -147,6 +160,22 @@ export function VendorForm({ vendor }: VendorFormProps) {
 
   return (
     <div className="space-y-4">
+      {(saving || deleting) && <BrandLoaderOverlay label={deleting ? '삭제 중' : '저장 중'} />}
+
+      {prefill && !isEdit && (
+        <div className="card-surface animate-fade-up p-4">
+          <p className="text-sm font-medium">계약 업체 DB에서 가져왔습니다</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            업체명·연락처·주소·작성자를 미리 채웠습니다. 저장하면 계약 업체 DB에서 이 항목은 삭제됩니다.
+          </p>
+          {prefill.memo.trim() && (
+            <p className="mt-2 rounded-md bg-neutral-50 p-2 text-xs whitespace-pre-wrap text-muted-foreground">
+              <span className="font-medium text-foreground">메모</span> · {prefill.memo}
+            </p>
+          )}
+        </div>
+      )}
+
       {errors.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-red-50 p-3 text-sm text-destructive">
           <p className="mb-1 font-medium">저장할 수 없습니다. 아래 항목을 확인해주세요.</p>

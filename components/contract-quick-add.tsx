@@ -4,9 +4,10 @@
 // 구두 계약 업체를 몰아서 쌓는 화면이라, 저장 후 담당자·계약형태는 그대로 두고
 // 업체명/전화/주소만 비워 연속 입력이 끊기지 않게 합니다.
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { BrandLoader } from '@/components/brand-loader';
 import { contractPayloadSchema } from '@/lib/contract-schema';
+import { createContract } from '@/app/contracts/actions';
 import {
   CONTRACT_FIELD_LABELS,
   ContractFields,
@@ -16,12 +17,14 @@ import {
 } from './contract-fields';
 
 export function ContractQuickAdd() {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<ContractFormState>(emptyContractForm);
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
+  // 이번 세션에서 저장한 업체들. 아래 목록은 서버 렌더라서 갱신이 한 박자 늦을 수 있는데,
+  // 사용자는 방금 넣은 게 들어갔는지 즉시 확인할 수 있어야 하므로 여기서 따로 보여준다.
+  const [justSaved, setJustSaved] = useState<string[]>([]);
   // 저장 성공 시 증가 — 입력창이 다시 활성화된 커밋 이후에 포커스를 돌려주기 위한 신호.
   // (setSaving(false) 와 같은 커밋에 묶이므로 effect 시점엔 disabled 가 이미 풀려 있다)
   const [refocus, setRefocus] = useState(0);
@@ -66,14 +69,10 @@ export function ContractQuickAdd() {
 
     setSaving(true);
     try {
-      const res = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setErrors([data?.error ?? `저장에 실패했습니다. (HTTP ${res.status})`]);
+      // 서버 액션 — 저장과 목록 갱신이 한 번의 왕복에서 함께 끝난다
+      const result = await createContract(payload);
+      if (!result.ok) {
+        setErrors(result.errors ?? ['저장에 실패했습니다.']);
         return;
       }
       // 담당자·계약형태는 유지 — 같은 담당자가 여러 곳을 연달아 입력하는 흐름이 대부분.
@@ -82,9 +81,9 @@ export function ContractQuickAdd() {
       // 메모는 업체마다 다른 내용이라 반드시 비운다 — 남겨두면 다음 업체에 엉뚱한 메모가 딸려 들어간다.
       // (담당자·계약형태만 유지)
       setSavedName(payload.name);
+      setJustSaved((prev) => [payload.name, ...prev]);
       setState((prev) => ({ ...prev, name: '', phone: '', address: '', memo: '' }));
       setRefocus((n) => n + 1);
-      router.refresh();
     } catch {
       setErrors(['네트워크 오류로 저장하지 못했습니다. 다시 시도해주세요.']);
     } finally {
@@ -151,6 +150,24 @@ export function ContractQuickAdd() {
               disabled={saving}
             />
 
+            {justSaved.length > 0 && (
+              <div className="mt-3 rounded-lg border border-black/[0.06] bg-neutral-50 p-2.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  방금 추가함 <span className="tabular-nums">{justSaved.length}곳</span>
+                </p>
+                <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                  {justSaved.map((name, i) => (
+                    <li
+                      key={`${name}-${i}`}
+                      className="animate-fade-up rounded-full bg-white px-2.5 py-1 text-xs shadow-soft"
+                    >
+                      ✓ {name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="mt-3 flex items-center justify-between gap-3">
               <p aria-live="polite" className="min-h-4 text-xs text-muted-foreground">
                 {savedName && (
@@ -160,6 +177,7 @@ export function ContractQuickAdd() {
                 )}
               </p>
               <div className="flex shrink-0 items-center gap-2">
+                {saving && <BrandLoader size="sm" label="" className="mr-1" />}
                 <Button type="button" variant="ghost" size="sm" onClick={toggle} disabled={saving}>
                   닫기
                 </Button>
