@@ -10,7 +10,8 @@ import type { Prisma } from '@prisma/client';
 import { AdminHeader } from '@/components/admin-header';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CONTRACTS_HEADING_ID, ContractDetailDialog } from '@/components/contract-detail-dialog';
+import { CONTRACTS_HEADING_ID } from '@/components/contract-detail-dialog';
+import { ContractRow } from '@/components/contract-row';
 import { ContractResultStatus } from '@/components/contract-result-status';
 import { ContractListControls } from '@/components/contract-list-controls';
 import { ContractQuickAdd } from '@/components/contract-quick-add';
@@ -256,28 +257,26 @@ export default async function ContractsPage({
                 {vendors.map((v, i) => {
                   const incomplete = isInfoIncomplete(v);
                   return (
-                    <TableRow
+                    <ContractRow
                       key={v.id}
-                      className="animate-fade-up"
+                      vendor={{ ...v, createdAt: v.createdAt.toISOString() }}
                       style={{ animationDelay: `${180 + Math.min(i, 14) * 25}ms` }}
                     >
                       <TableCell>
-                        <ContractDetailDialog vendor={{ ...v, createdAt: v.createdAt.toISOString() }}>
-                          <button
-                            type="button"
-                            className="group/edit flex items-center gap-1.5 rounded text-left font-medium transition-colors hover:text-[var(--brand-to)]"
-                            title="눌러서 상세 보기"
+                        {/* 키보드용 트리거 — 클릭은 행으로 올라가 상세 모달이 열린다 */}
+                        <button
+                          type="button"
+                          className="group/edit flex items-center gap-1.5 rounded text-left font-medium transition-colors hover:text-[var(--brand-to)]"
+                        >
+                          <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
+                          <span
+                            aria-hidden
+                            className="text-xs text-neutral-500 transition-colors group-hover/edit:text-[var(--brand-to)]"
                           >
-                            <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
-                            <span
-                              aria-hidden
-                              className="text-xs text-neutral-500 transition-colors group-hover/edit:text-[var(--brand-to)]"
-                            >
-                              ✎
-                            </span>
-                            <span className="sr-only">상세 보기</span>
-                          </button>
-                        </ContractDetailDialog>
+                            ✎
+                          </span>
+                          <span className="sr-only">상세 보기</span>
+                        </button>
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
@@ -329,7 +328,7 @@ export default async function ContractsPage({
                         {formatDate(v.createdAt)}
                         {incomplete && <span className="sr-only"> (정보 미비)</span>}
                       </TableCell>
-                    </TableRow>
+                    </ContractRow>
                   );
                 })}
               </TableBody>

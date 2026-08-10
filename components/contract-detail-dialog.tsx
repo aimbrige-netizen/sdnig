@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { BrandLoader } from '@/components/brand-loader';
 import { contractPayloadSchema } from '@/lib/contract-schema';
@@ -96,11 +95,12 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
 
 interface ContractDetailDialogProps {
   vendor: ContractDTO;
-  children: React.ReactNode; // 트리거 (행 안의 버튼)
+  /** 열림 상태는 바깥(행 컴포넌트)에서 제어한다 — 행 아무 곳이나 눌러도 열리게 하기 위함 */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function ContractDetailDialog({ vendor, children }: ContractDetailDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ContractDetailDialog({ vendor, open, onOpenChange }: ContractDetailDialogProps) {
   const [editing, setEditing] = useState(false);
   const [state, setState] = useState<ContractFormState>(() => formStateFrom(vendor));
   const [errors, setErrors] = useState<string[]>([]);
@@ -124,7 +124,7 @@ export function ContractDetailDialog({ vendor, children }: ContractDetailDialogP
 
   function handleOpenChange(next: boolean) {
     if (busy) return; // 저장·삭제 중에는 닫히지 않게
-    setOpen(next);
+    onOpenChange(next);
     if (next) {
       setState(latest);
       setErrors([]);
@@ -160,7 +160,7 @@ export function ContractDetailDialog({ vendor, children }: ContractDetailDialogP
       // 갱신된 화면이 커밋되기 전에 다시 열어도 방금 저장한 값이 보이도록 기준값을 먼저 올린다
       setLatest(state);
       setEditing(false);
-      setOpen(false);
+      onOpenChange(false);
     } catch {
       setErrors(['네트워크 오류로 저장하지 못했습니다. 다시 시도해주세요.']);
     } finally {
@@ -178,7 +178,7 @@ export function ContractDetailDialog({ vendor, children }: ContractDetailDialogP
         setErrors(result.errors ?? ['삭제에 실패했습니다.']);
         return;
       }
-      setOpen(false);
+      onOpenChange(false);
       // Base UI 는 닫을 때 트리거로 포커스를 되돌리는데, 그 트리거가 든 행이 곧 언마운트되어
       // 포커스가 body 로 유실된다. 남아 있는 목록 제목으로 명시적으로 옮긴다.
       document.getElementById(CONTRACTS_HEADING_ID)?.focus();
@@ -191,7 +191,6 @@ export function ContractDetailDialog({ vendor, children }: ContractDetailDialogP
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={children as React.ReactElement<Record<string, unknown>>} />
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -270,7 +269,7 @@ export function ContractDetailDialog({ vendor, children }: ContractDetailDialogP
                       Button render={<Link/>} 는 Base UI 가 비-button 요소라고 경고한다. */}
                   <Link
                     href={`/vendors/new?fromContract=${vendor.id}`}
-                    onClick={() => setOpen(false)}
+                    onClick={() => onOpenChange(false)}
                     className={buttonVariants({ size: 'sm' })}
                   >
                     업체정보 작성
