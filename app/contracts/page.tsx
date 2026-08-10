@@ -1,5 +1,5 @@
 // 계약 업체 DB — 구두/서면 계약만 맺고 상세 정보를 아직 못 받은 업체 명단.
-// 정식 입점 업체(/vendors)와 달리 업체명·전화번호·주소·DB담당자 4개만 받고,
+// 정식 입점 업체(/vendors)와 달리 업체명·전화번호·주소·DB담당자 + 메모만 받고,
 // 계약서를 쓴 곳과 구두로만 한 곳을 구분해 관리합니다.
 //
 // 요약부는 차트가 아니라 KPI 스탯 타일 + 미터입니다(dataviz: "몇 개의 헤드라인 숫자" → KPI row,
@@ -98,13 +98,14 @@ export default async function ContractsPage({
   const onlyIncomplete = first(sp.incomplete) === '1';
   const query: ContractQuery = { q, type: activeType, sort, incomplete: onlyIncomplete };
 
-  // 검색어: 업체명·전화번호·주소·담당자 중 아무 곳이나 포함되면 매칭
+  // 검색어: 업체명·전화번호·주소·담당자·메모 중 아무 곳이나 포함되면 매칭
   const searchOr: Prisma.ContractedVendorWhereInput = {
     OR: [
       { name: { contains: q, mode: 'insensitive' } },
       { phone: { contains: q } },
       { address: { contains: q, mode: 'insensitive' } },
       { managerName: { contains: q, mode: 'insensitive' } },
+      { memo: { contains: q, mode: 'insensitive' } },
     ],
   };
 
@@ -247,6 +248,7 @@ export default async function ContractsPage({
                   <TableHead>전화번호</TableHead>
                   <TableHead>주소</TableHead>
                   <TableHead>DB담당자</TableHead>
+                  <TableHead>메모</TableHead>
                   <TableHead className="text-right">등록일</TableHead>
                 </TableRow>
               </TableHeader>
@@ -312,6 +314,17 @@ export default async function ContractsPage({
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{v.managerName || '-'}</TableCell>
+                      {/* 주소와 같은 이유로 안쪽 블록 요소에 max-width 를 건다.
+                          전체 내용은 title 로 확인할 수 있게 한다. */}
+                      <TableCell className="text-muted-foreground">
+                        {v.memo?.trim() ? (
+                          <span className="block max-w-72 truncate" title={v.memo}>
+                            {v.memo}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right text-muted-foreground tabular-nums">
                         {formatDate(v.createdAt)}
                         {incomplete && <span className="sr-only"> (정보 미비)</span>}

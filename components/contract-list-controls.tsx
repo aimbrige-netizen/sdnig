@@ -132,11 +132,11 @@ export function ContractListControls({ query, chips }: ContractListControlsProps
             onKeyDown={(e) => {
               if (e.key === 'Enter') submitSearch(text);
             }}
-            placeholder="업체명·전화번호·주소·담당자 검색"
+            placeholder="업체명·전화번호·주소·담당자·메모 검색"
             aria-label="계약 업체 검색"
             className={cn(
               // no-native-clear: Safari 기본 취소 버튼이 커스텀 × 와 겹쳐 보이는 것을 막는다 (globals.css)
-              'no-native-clear h-9 w-64 rounded-md border border-input bg-white pl-3 pr-9 text-sm shadow-xs transition-colors',
+              'no-native-clear h-9 w-72 rounded-md border border-input bg-white pl-3 pr-9 text-sm shadow-xs transition-colors',
               'placeholder:text-neutral-500',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
             )}

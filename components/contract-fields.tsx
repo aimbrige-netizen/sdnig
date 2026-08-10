@@ -4,6 +4,7 @@
 import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/vendor-form/native-select';
 import { CONTRACT_TYPES, type ContractType } from '@/lib/contract-constants';
 import { cn } from '@/lib/utils';
@@ -14,10 +15,11 @@ export interface ContractFormState {
   phone: string;
   address: string;
   managerName: string;
+  memo: string;
 }
 
 export function emptyContractForm(): ContractFormState {
-  return { name: '', contractType: 'verbal', phone: '', address: '', managerName: '' };
+  return { name: '', contractType: 'verbal', phone: '', address: '', managerName: '', memo: '' };
 }
 
 export function serializeContract(state: ContractFormState) {
@@ -27,6 +29,7 @@ export function serializeContract(state: ContractFormState) {
     phone: state.phone,
     address: state.address,
     managerName: state.managerName,
+    memo: state.memo,
   };
 }
 
@@ -37,6 +40,7 @@ export const CONTRACT_FIELD_LABELS: Record<string, string> = {
   phone: '전화번호',
   address: '주소',
   managerName: 'DB담당자',
+  memo: '메모',
 };
 
 // htmlFor/id 로 라벨과 입력을 반드시 연결한다. 연결이 없으면 스크린리더가 칸 이름을 못 읽고,
@@ -158,6 +162,21 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder="예: 홍길동"
+        />
+      </div>
+
+      {/* 메모는 길어질 수 있어 한 줄을 통째로 쓴다.
+          Enter 로 저장하지 않고 줄바꿈이 되도록 onKeyDown 을 붙이지 않는다. */}
+      <div className="space-y-1 col-span-full">
+        <FieldLabel htmlFor={id('memo')}>메모</FieldLabel>
+        <Textarea
+          id={id('memo')}
+          rows={2}
+          value={state.memo}
+          onChange={(e) => patch({ memo: e.target.value })}
+          disabled={disabled}
+          placeholder="구두 계약 조건, 진행 상황 등 자유롭게 (선택)"
+          className="min-h-16"
         />
       </div>
     </div>

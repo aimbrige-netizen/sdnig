@@ -24,6 +24,7 @@ export const contractPayloadSchema = z.object({
   phone: optionalText(30),
   address: optionalText(200),
   managerName: z.string().trim().min(1, 'DB담당자를 입력해주세요').max(50, '50자 이내로 입력해주세요'),
+  memo: optionalText(1000),
 });
 
 export type ContractPayload = z.infer<typeof contractPayloadSchema>;

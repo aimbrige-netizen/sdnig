@@ -30,6 +30,7 @@ export interface ContractDTO {
   phone: string | null;
   address: string | null;
   managerName: string | null;
+  memo: string | null;
 }
 
 function formStateFrom(vendor: ContractDTO): ContractFormState {
@@ -39,6 +40,7 @@ function formStateFrom(vendor: ContractDTO): ContractFormState {
     phone: vendor.phone ?? '',
     address: vendor.address ?? '',
     managerName: vendor.managerName ?? '',
+    memo: vendor.memo ?? '',
   };
 }
 
@@ -51,6 +53,7 @@ function signatureOf(vendor: ContractDTO): string {
     vendor.phone ?? '',
     vendor.address ?? '',
     vendor.managerName ?? '',
+    vendor.memo ?? '',
   ]);
 }
 

@@ -44,6 +44,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         phone: data.phone,
         address: data.address,
         managerName: data.managerName,
+        memo: data.memo,
       },
     });
   } catch (e) {

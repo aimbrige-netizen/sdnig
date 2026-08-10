@@ -17,6 +17,7 @@ model ContractedVendor {
   phone        String? // 전화번호 — 아직 못 받은 곳이 많아 선택 입력
   address      String? // 주소 — 아직 못 받은 곳이 많아 선택 입력
   managerName  String? // DB담당자 (필수 입력, app 레벨에서 검증)
+  memo         String? // 메모 — 구두 계약 조건, 진행 상황 등 자유 기록
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
