@@ -6,82 +6,50 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { PhotoRow } from './form-state';
 
-// 업로드 전 브라우저에서 리사이즈/재인코딩하는 기준.
-//
-// 예전에는 Vercel 요청 본문 제한(약 4.5MB)을 못 넘기는 것만 목표라 4MB 초과일 때만 줄였는데,
-// 요즘 휴대폰 사진은 대부분 2~4MB 라 거의 원본 그대로 올라갔다. 웹에서 보여줄 용도로는
-// 2000px · 1MB 면 충분해 화질 차이가 거의 없으면서 전송량은 크게 줄어든다.
-const TARGET_BYTES = 1024 * 1024; // 이 크기 이하로 맞추는 것을 목표로 한다
-const MAX_DIMENSION = 2000; // 긴 변 기준 최대 픽셀
-
 /**
- * 큰 이미지를 캔버스로 리사이즈 + JPEG 재인코딩.
- * 목표 크기보다 크거나 해상도가 과한 경우에만 손대고, 결과가 원본보다 커지면 원본을 쓴다.
- * GIF(애니메이션 가능성) · 이미지 아님 · 실패 시에는 원본 그대로 반환.
+ * 사진 1장을 올리고 저장된 URL을 돌려준다.
+ *
+ * 사진은 원본 그대로 보관한다. 나중에 앱 화면에서 크게 보여줘야 하는데, 한 번 줄여서 올리면
+ * 원본을 되찾을 방법이 없기 때문이다. (화면 표시용 축소본이 필요해지면 보관된 원본에서
+ * 언제든 만들 수 있다.)
+ *
+ * 원본을 보관하려면 서버를 거치면 안 된다. Vercel 함수는 요청 본문이 약 4.5MB 로 제한돼
+ * 그보다 큰 사진은 업로드 자체가 실패하고, 통과하더라도 같은 파일이 브라우저→함수→Storage 로
+ * 두 번 이동해 그만큼 느려진다. 그래서 서버에서는 1회용 업로드 URL만 받고, 파일은 브라우저에서
+ * Supabase Storage 로 곧장 올린다.
  */
-async function compressImageIfNeeded(file: File): Promise<File> {
-  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
-
-  try {
-    // EXIF 방향 정보를 반영해야 휴대폰 세로사진이 눕지 않는다
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const longest = Math.max(bitmap.width, bitmap.height);
-
-    // 이미 작고 해상도도 적당하면 건드리지 않는다 (재인코딩은 화질만 깎는다)
-    if (file.size <= TARGET_BYTES && longest <= MAX_DIMENSION) {
-      bitmap.close();
-      return file;
-    }
-
-    const scale = Math.min(1, MAX_DIMENSION / longest);
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      bitmap.close();
-      return file;
-    }
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
-
-    let quality = 0.82;
-    let best: Blob | null = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-      if (!blob) break;
-      best = blob;
-      if (blob.size <= TARGET_BYTES || quality <= 0.55) break;
-      quality -= 0.12;
-    }
-
-    // 재인코딩 결과가 원본보다 크면(이미 잘 압축된 사진) 원본을 그대로 쓴다
-    if (best && best.size < file.size) {
-      const name = file.name.replace(/\.[^.]+$/, '') + '.jpg';
-      return new File([best], name, { type: 'image/jpeg' });
-    }
-  } catch {
-    // 압축 실패 시 원본으로 업로드 시도 (실패하면 아래 uploadOne의 안내 메시지가 뜬다)
-  }
-  return file;
-}
-
 async function uploadOne(file: File): Promise<string> {
-  const toUpload = await compressImageIfNeeded(file);
-  const formData = new FormData();
-  formData.append('file', toUpload);
-  const res = await fetch('/api/upload', { method: 'POST', body: formData });
-  if (res.status === 413) {
-    throw new Error(`파일이 너무 커서 업로드하지 못했습니다 (${file.name}). 사진 용량을 줄여서 다시 시도해주세요.`);
+  const ticket = await fetch('/api/upload-url', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
+  });
+  const issued = await ticket.json().catch(() => null);
+  if (!ticket.ok) {
+    throw new Error(issued?.error ?? `업로드 실패 (${file.name})`);
   }
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data?.url) {
-    throw new Error(data?.error ?? `업로드 실패 (${file.name})`);
+
+  // Supabase 미설정(로컬 개발) — 기존 서버 경유 업로드로 폴백
+  if (issued?.mode !== 'direct') {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.url) {
+      throw new Error(data?.error ?? `업로드 실패 (${file.name})`);
+    }
+    return data.url as string;
   }
-  return data.url as string;
+
+  // 브라우저 → Supabase Storage 직접 업로드 (supabase-js 없이, 발급받은 URL만 사용)
+  const body = new FormData();
+  body.append('cacheControl', '3600');
+  body.append('', file);
+  const put = await fetch(issued.signedUrl, { method: 'PUT', body, headers: { 'x-upsert': 'false' } });
+  if (!put.ok) {
+    throw new Error(`업로드 실패 (${file.name}) — 잠시 후 다시 시도해주세요.`);
+  }
+  return issued.publicUrl as string;
 }
 
 interface DropzoneProps {
