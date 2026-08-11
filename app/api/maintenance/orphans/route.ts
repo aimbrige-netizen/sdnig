@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { listAllObjects, objectPathFromUrl, deleteObjectPaths } from '@/lib/storage';
+import { listAllObjects, collectBucketPaths, deleteObjectPaths } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,24 +35,18 @@ function authorize(request: Request): NextResponse | null {
   return null;
 }
 
-function photoUrls(photos: Prisma.JsonValue | null | undefined): string[] {
-  if (!Array.isArray(photos)) return [];
-  return photos
-    .map((p) => (p && typeof p === 'object' && 'url' in p ? (p as { url: unknown }).url : null))
-    .filter((u): u is string => typeof u === 'string' && u.length > 0);
-}
-
-/** DB 의 모든 업체가 참조 중인 파일 경로 집합 */
+/**
+ * DB 의 모든 업체가 참조 중인 파일 경로 집합.
+ *
+ * 사진 URL 이 들어가는 자리가 한 곳이 아니다 — photos(대표/갤러리/드레스)뿐 아니라
+ * products[].photos(상품사진)에도 들어가고, 업종별 필드(categoryData)가 늘어나면
+ * 또 생길 수 있다. 필드를 하나씩 열거하면 빠뜨린 곳의 사진이 "아무도 안 쓰는 파일"로
+ * 분류돼 지워진다. 그래서 필드를 특정하지 않고 업체 레코드 전체를 문자열로 훑어
+ * 이 버킷의 URL 을 모두 찾아낸다.
+ */
 async function referencedPaths(): Promise<Set<string>> {
-  const vendors = await prisma.vendor.findMany({ select: { photos: true } });
-  const set = new Set<string>();
-  for (const v of vendors) {
-    for (const url of photoUrls(v.photos)) {
-      const p = objectPathFromUrl(url);
-      if (p) set.add(p);
-    }
-  }
-  return set;
+  const vendors = await prisma.vendor.findMany();
+  return collectBucketPaths(vendors);
 }
 
 async function survey() {

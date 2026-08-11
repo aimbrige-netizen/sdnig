@@ -43,6 +43,26 @@ export function objectPathFromUrl(url: string): string | null {
 }
 
 /**
+ * 임의의 값(객체·배열·문자열)을 재귀적으로 훑어 이 버킷의 파일 경로를 모두 모은다.
+ *
+ * 사진 URL 이 들어가는 자리가 한 곳이 아니다 — photos(대표/갤러리/드레스) 외에
+ * products[].photos(상품사진)에도 들어가고, 업종별 필드가 늘어나면 또 생길 수 있다.
+ * 필드를 하나씩 열거하면 빠뜨린 자리의 사진을 "아무도 안 쓰는 파일"로 오인해 지우게 되므로
+ * 자리를 특정하지 않고 전체를 훑는다.
+ */
+export function collectBucketPaths(value: unknown, into = new Set<string>()): Set<string> {
+  if (typeof value === 'string') {
+    const p = objectPathFromUrl(value);
+    if (p) into.add(p);
+  } else if (Array.isArray(value)) {
+    for (const v of value) collectBucketPaths(v, into);
+  } else if (value && typeof value === 'object') {
+    for (const v of Object.values(value as Record<string, unknown>)) collectBucketPaths(v, into);
+  }
+  return into;
+}
+
+/**
  * 사진 URL 목록에 해당하는 Storage 파일을 지운다.
  *
  * 업체나 사진을 지워도 파일이 남아 있으면 앱 어디에서도 안 보이는 채로 용량만 차지한다.
