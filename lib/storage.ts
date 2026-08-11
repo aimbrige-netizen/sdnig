@@ -28,6 +28,107 @@ function datedDir(): string {
 }
 
 /**
+ * 공개 URL에서 버킷 내부 경로를 뽑아낸다.
+ * `https://<ref>.supabase.co/storage/v1/object/public/<버킷>/vendors/2026/08/xxx.jpg`
+ *   → `vendors/2026/08/xxx.jpg`
+ *
+ * 이 버킷의 공개 URL이 아니면(로컬 개발용 `/uploads/...` 등) null 을 돌려준다.
+ */
+export function objectPathFromUrl(url: string): string | null {
+  const marker = `/storage/v1/object/public/${BUCKET}/`;
+  const at = url.indexOf(marker);
+  if (at === -1) return null;
+  const objectPath = url.slice(at + marker.length).split('?')[0];
+  return objectPath ? decodeURIComponent(objectPath) : null;
+}
+
+/**
+ * 사진 URL 목록에 해당하는 Storage 파일을 지운다.
+ *
+ * 업체나 사진을 지워도 파일이 남아 있으면 앱 어디에서도 안 보이는 채로 용량만 차지한다.
+ * 이 버킷의 파일이 아닌 URL(로컬 개발 경로 등)은 조용히 건너뛴다.
+ * 삭제 실패가 업체 삭제/수정 자체를 막으면 안 되므로 예외는 삼키고 개수만 돌려준다.
+ */
+export async function deleteImages(urls: string[]): Promise<number> {
+  const supabase = supabaseAdmin();
+  if (!supabase) return 0;
+
+  const paths = [...new Set(urls.map(objectPathFromUrl).filter((p): p is string => p !== null))];
+  if (paths.length === 0) return 0;
+
+  try {
+    const { data, error } = await supabase.storage.from(BUCKET).remove(paths);
+    if (error) {
+      console.error('[storage] 사진 삭제 실패:', error.message);
+      return 0;
+    }
+    return data?.length ?? 0;
+  } catch (e) {
+    console.error('[storage] 사진 삭제 중 오류:', e);
+    return 0;
+  }
+}
+
+export interface StoredObject {
+  path: string;
+  size: number;
+  createdAt: string;
+}
+
+/** 버킷 안의 모든 파일을 재귀적으로 나열한다 (고아 파일 정리용). */
+export async function listAllObjects(prefix = ''): Promise<StoredObject[]> {
+  const supabase = supabaseAdmin();
+  if (!supabase) return [];
+
+  const out: StoredObject[] = [];
+  const PAGE = 100;
+  let offset = 0;
+
+  for (;;) {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .list(prefix, { limit: PAGE, offset, sortBy: { column: 'name', order: 'asc' } });
+    if (error) throw new Error(`목록 조회 실패(${prefix || '/'}): ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    for (const entry of data) {
+      const full = prefix ? `${prefix}/${entry.name}` : entry.name;
+      // id 가 없는 항목은 파일이 아니라 하위 폴더다
+      if (entry.id) {
+        out.push({
+          path: full,
+          size: (entry.metadata?.size as number | undefined) ?? 0,
+          createdAt: entry.created_at ?? '',
+        });
+      } else {
+        out.push(...(await listAllObjects(full)));
+      }
+    }
+
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+
+  return out;
+}
+
+/** 버킷 내부 경로 목록을 직접 지운다 (고아 파일 정리용). */
+export async function deleteObjectPaths(paths: string[]): Promise<string[]> {
+  const supabase = supabaseAdmin();
+  if (!supabase || paths.length === 0) return [];
+
+  const removed: string[] = [];
+  // Storage API 한 번에 너무 많이 보내지 않도록 나눠서 삭제
+  for (let i = 0; i < paths.length; i += 100) {
+    const chunk = paths.slice(i, i + 100);
+    const { data, error } = await supabase.storage.from(BUCKET).remove(chunk);
+    if (error) throw new Error(`삭제 실패: ${error.message}`);
+    removed.push(...(data ?? []).map((d) => d.name));
+  }
+  return removed;
+}
+
+/**
  * 브라우저가 Supabase Storage 로 직접 올릴 수 있는 1회용 업로드 URL을 발급한다 (2시간 유효).
  *
  * 사진을 서버(=Vercel 함수)를 거쳐 올리면 같은 파일이 두 번 이동하고(브라우저→함수→Storage),
