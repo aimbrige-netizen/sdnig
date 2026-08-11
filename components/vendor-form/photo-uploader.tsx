@@ -6,20 +6,34 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { PhotoRow } from './form-state';
 
-// Vercel Serverless Function 요청 본문 제한(약 4.5MB)에 여유를 둔 안전선.
-// 휴대폰 카메라 사진은 이 값을 쉽게 넘기므로 업로드 전에 브라우저에서 리사이즈/재인코딩한다.
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
-const MAX_DIMENSION = 2000;
+// 업로드 전 브라우저에서 리사이즈/재인코딩하는 기준.
+//
+// 예전에는 Vercel 요청 본문 제한(약 4.5MB)을 못 넘기는 것만 목표라 4MB 초과일 때만 줄였는데,
+// 요즘 휴대폰 사진은 대부분 2~4MB 라 거의 원본 그대로 올라갔다. 웹에서 보여줄 용도로는
+// 2000px · 1MB 면 충분해 화질 차이가 거의 없으면서 전송량은 크게 줄어든다.
+const TARGET_BYTES = 1024 * 1024; // 이 크기 이하로 맞추는 것을 목표로 한다
+const MAX_DIMENSION = 2000; // 긴 변 기준 최대 픽셀
 
-/** 큰 이미지를 캔버스로 리사이즈 + JPEG 재인코딩. GIF(애니메이션 가능성) · 이미지 아님 · 이미 작음 · 실패 시 원본 그대로 반환 */
+/**
+ * 큰 이미지를 캔버스로 리사이즈 + JPEG 재인코딩.
+ * 목표 크기보다 크거나 해상도가 과한 경우에만 손대고, 결과가 원본보다 커지면 원본을 쓴다.
+ * GIF(애니메이션 가능성) · 이미지 아님 · 실패 시에는 원본 그대로 반환.
+ */
 async function compressImageIfNeeded(file: File): Promise<File> {
   if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
-  if (file.size <= MAX_UPLOAD_BYTES) return file;
 
   try {
     // EXIF 방향 정보를 반영해야 휴대폰 세로사진이 눕지 않는다
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const longest = Math.max(bitmap.width, bitmap.height);
+
+    // 이미 작고 해상도도 적당하면 건드리지 않는다 (재인코딩은 화질만 깎는다)
+    if (file.size <= TARGET_BYTES && longest <= MAX_DIMENSION) {
+      bitmap.close();
+      return file;
+    }
+
+    const scale = Math.min(1, MAX_DIMENSION / longest);
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
 
@@ -27,19 +41,27 @@ async function compressImageIfNeeded(file: File): Promise<File> {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
-    let quality = 0.85;
+    let quality = 0.82;
+    let best: Blob | null = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
       if (!blob) break;
-      if (blob.size <= MAX_UPLOAD_BYTES || quality <= 0.5) {
-        const name = file.name.replace(/\.[^.]+$/, '') + '.jpg';
-        return new File([blob], name, { type: 'image/jpeg' });
-      }
-      quality -= 0.15;
+      best = blob;
+      if (blob.size <= TARGET_BYTES || quality <= 0.55) break;
+      quality -= 0.12;
+    }
+
+    // 재인코딩 결과가 원본보다 크면(이미 잘 압축된 사진) 원본을 그대로 쓴다
+    if (best && best.size < file.size) {
+      const name = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+      return new File([best], name, { type: 'image/jpeg' });
     }
   } catch {
     // 압축 실패 시 원본으로 업로드 시도 (실패하면 아래 uploadOne의 안내 메시지가 뜬다)
@@ -75,6 +97,7 @@ interface DropzoneProps {
 function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compact }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   async function handleFiles(fileList: FileList | null) {
@@ -82,16 +105,37 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
     if (!fileList || fileList.length === 0) return;
     const files = multiple ? Array.from(fileList) : [fileList[0]];
     setUploading(true);
-    const urls: string[] = [];
+    setProgress({ done: 0, total: files.length });
+
+    // 한 장씩 순서대로 올리면 사진 수만큼 대기 시간이 곱해진다(10장이면 10배).
+    // 동시에 올리되, 휴대폰 회선이나 서버가 감당하도록 동시 개수는 제한한다.
+    const CONCURRENCY = 4;
+    const results: (string | null)[] = new Array(files.length).fill(null);
     const errors: string[] = [];
-    for (const file of files) {
-      try {
-        urls.push(await uploadOne(file));
-      } catch (e) {
-        errors.push(e instanceof Error ? e.message : String(e));
+    let next = 0;
+    let done = 0;
+
+    async function worker() {
+      while (true) {
+        const i = next++;
+        if (i >= files.length) return;
+        try {
+          results[i] = await uploadOne(files[i]);
+        } catch (e) {
+          errors.push(e instanceof Error ? e.message : String(e));
+        } finally {
+          done += 1;
+          setProgress({ done, total: files.length });
+        }
       }
     }
+
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, files.length) }, worker));
+
     setUploading(false);
+    setProgress(null);
+    // 고른 순서를 유지해서 넘긴다 (동시에 올려도 순서가 뒤섞이지 않도록)
+    const urls = results.filter((u): u is string => u !== null);
     if (urls.length > 0) onUploaded(urls);
     if (errors.length > 0) alert(errors.join('\n'));
   }
@@ -131,7 +175,13 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
         }}
       />
       {uploading ? (
-        <span className="text-muted-foreground">{compact ? '···' : '업로드 중...'}</span>
+        <span className="text-muted-foreground">
+          {compact
+            ? '···'
+            : progress && progress.total > 1
+              ? `업로드 중... ${progress.done}/${progress.total}`
+              : '업로드 중...'}
+        </span>
       ) : (
         (children ?? <span className="text-muted-foreground">클릭 또는 드래그하여 사진 업로드</span>)
       )}
