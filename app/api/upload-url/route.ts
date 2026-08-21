@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createDirectUploadUrl } from '@/lib/storage';
-import { MAX_UPLOAD_BYTES, UPLOAD_MIME_TYPES, isVideoMime } from '@/lib/constants';
+import { MAX_UPLOAD_BYTES, isAllowedUpload, isVideoMime } from '@/lib/constants';
 
 export const runtime = 'nodejs';
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
   if (!name) {
     return NextResponse.json({ error: '파일 이름이 없습니다.' }, { status: 400 });
   }
-  if (!(UPLOAD_MIME_TYPES as readonly string[]).includes(type)) {
+  if (!isAllowedUpload(name, type)) {
     return NextResponse.json(
       { error: '이미지(jpg, png, webp, gif, avif) 또는 영상(mp4, mov, webm) 파일만 올릴 수 있습니다.' },
       { status: 400 }

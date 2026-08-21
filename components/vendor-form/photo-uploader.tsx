@@ -17,6 +17,8 @@ const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|qt)$/i;
 const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif|avif|heic|heif)$/i;
 /** 한 번에 고를 수 있는 개수 — 실수로 폴더째 넣어 무료 용량을 통째로 태우는 것을 막는다 */
 const MAX_FILES_PER_DROP = 30;
+/** 한 번에 올릴 수 있는 총 용량. 개수만 막으면 30 × 50MB = 1.5GB 로 무료 저장 한도를 한 번에 넘긴다 */
+const MAX_BYTES_PER_DROP = 300 * 1024 * 1024;
 
 /**
  * 업로드가 진행 중인지 폼 전체에 알리기 위한 통로.
@@ -171,7 +173,9 @@ async function uploadOne(
 
   // 브라우저 → Supabase Storage 직접 업로드 (supabase-js 없이, 발급받은 URL만 사용)
   const body = new FormData();
-  body.append('cacheControl', '3600');
+  // 파일명이 UUID 라 같은 주소의 내용이 바뀌는 일이 없다. 1시간(기본값)으로 두면 50MB 영상을
+  // 한 시간마다 다시 내려받게 되는데, 무료 플랜의 월 전송량이 5GB 라 금방 소진된다.
+  body.append('cacheControl', '31536000');
   body.append('', file);
   try {
     await putWithProgress(issued.signedUrl, body, onProgress, register);
@@ -219,15 +223,27 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
     }
 
     // 올리기 전에 거를 수 있는 건 여기서 거른다 (드래그로는 accept 를 우회할 수 있다)
+    let running = 0;
     const files = picked.filter((f) => {
       const problem = preflight(f, kind);
-      if (problem) notices.push(problem);
-      return !problem;
+      if (problem) {
+        notices.push(problem);
+        return false;
+      }
+      if (running + f.size > MAX_BYTES_PER_DROP) {
+        notices.push(
+          `${f.name}: 한 번에 올릴 수 있는 총 용량(${Math.round(MAX_BYTES_PER_DROP / 1024 / 1024)}MB)을 넘어 제외했습니다. 나눠서 올려주세요.`
+        );
+        return false;
+      }
+      running += f.size;
+      return true;
     });
-    if (files.length === 0) {
-      if (notices.length > 0) alert(notices.join('\n'));
-      return;
-    }
+
+    // 거절된 파일은 이 시점에 이미 확정이다. 업로드가 다 끝난 뒤에 알리면 몇 분 전 얘기를
+    // 뒤늦게 하는 꼴이 되므로, 통과한 파일이 있든 없든 여기서 바로 알린다.
+    if (notices.length > 0) alert(notices.join('\n'));
+    if (files.length === 0) return;
 
     canceledRef.current = false;
     abortsRef.current.clear();
@@ -240,7 +256,7 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
     // 4개를 동시에 밀어넣으면 회선을 다 먹고 오히려 느려져서 2개로 낮춘다.
     const CONCURRENCY = isVideoZone ? 2 : 4;
     const results: (string | null)[] = new Array(files.length).fill(null);
-    const errors: string[] = [...notices];
+    const errors: string[] = [];
     // 파일별 전송 비율(0~1). 크기로 가중해 큰 파일이 진행률을 지배하도록 한다.
     const fractions = new Array(files.length).fill(0);
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
@@ -382,7 +398,8 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
         {uploading ? `업로드를 시작했습니다. 총 ${progress?.total ?? 1}개.` : ''}
       </p>
 
-      {uploading && !compact && (
+      {/* 업로드 중에는 폼 저장이 잠기므로, 작은 타일(상품사진)에도 빠져나갈 수단이 있어야 한다 */}
+      {uploading && (
         <div className="flex items-center gap-2">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200">
             <div
@@ -390,6 +407,7 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
               style={{ width: `${progress?.percent ?? 0}%` }}
             />
           </div>
+          {compact && <span className="text-[11px] text-muted-foreground">{progress?.percent ?? 0}%</span>}
           <Button type="button" variant="outline" size="sm" onClick={cancelAll}>
             취소
           </Button>
@@ -570,7 +588,7 @@ function VideoThumb({ url }: { url: string }) {
           {isMov ? '이 브라우저는 .mov 미리보기를 지원하지 않습니다' : '미리보기를 열지 못했습니다'}
         </span>
         <span className="text-[11px] text-muted-foreground">
-          {isMov ? '파일은 정상 저장됨' : '형식 문제이거나 아직 전송 중일 수 있습니다'}
+          {isMov ? '파일은 정상 저장됨' : '파일은 저장됐지만 이 브라우저가 코덱을 지원하지 않습니다'}
         </span>
         <a
           href={url}
@@ -618,9 +636,17 @@ export function VideoListField({ videos, onUpdate }: VideoListFieldProps) {
     // 순서를 바꾸면 버튼이 다시 그려지며 포커스가 body 로 날아간다.
     // 키보드로 연속해서 옮길 수 있도록 옮겨간 자리의 같은 버튼으로 포커스를 되돌린다.
     requestAnimationFrame(() => {
+      const to = index + delta;
       const dir = delta < 0 ? 'up' : 'down';
-      const el = document.querySelector<HTMLButtonElement>(`[data-video-move="${dir}-${index + delta}"]`);
-      el?.focus();
+      // 맨 위·맨 아래로 옮기면 같은 방향 버튼이 비활성이라 focus() 가 먹지 않고 포커스가
+      // body 로 날아간다. 그럴 때는 반대 방향 버튼으로 보낸다.
+      const primary = document.querySelector<HTMLButtonElement>(`[data-video-move="${dir}-${to}"]`);
+      if (primary && !primary.disabled) {
+        primary.focus();
+        return;
+      }
+      const other = dir === 'up' ? 'down' : 'up';
+      document.querySelector<HTMLButtonElement>(`[data-video-move="${other}-${to}"]`)?.focus();
     });
   }
 
@@ -637,7 +663,9 @@ export function VideoListField({ videos, onUpdate }: VideoListFieldProps) {
             const name = video.label.trim() || `영상 ${i + 1}`;
             return (
               <li
-                key={`${video.url}-${i}`}
+                // key 에 인덱스를 섞으면 순서를 바꿀 때마다 <video> 가 새로 마운트돼
+                // 재생이 끊기고 50MB 를 다시 받는다. URL 은 UUID 라 그 자체로 고유하다.
+                key={video.url}
                 className="flex flex-col gap-3 rounded-lg border bg-white p-2 sm:flex-row sm:items-center"
               >
                 <VideoThumb url={video.url} />

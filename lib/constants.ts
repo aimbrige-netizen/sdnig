@@ -65,6 +65,21 @@ export function isVideoMime(type: string): boolean {
   return (VIDEO_MIME_TYPES as readonly string[]).includes(type);
 }
 
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm|qt)$/i;
+const IMAGE_EXT = /\.(jpe?g|png|webp|gif|avif)$/i;
+
+/**
+ * 업로드를 받아도 되는 파일인지 판정한다.
+ *
+ * 일부 안드로이드 기기·브라우저는 파일의 MIME 을 빈 문자열로 준다. MIME 만 보고 막으면
+ * 멀쩡한 영상이 거부되므로, 비어 있을 때는 파일명 확장자로 판단한다.
+ * (클라이언트와 서버가 같은 규칙을 써야 한쪽만 통과하는 일이 없다.)
+ */
+export function isAllowedUpload(name: string, type: string): boolean {
+  if (type) return (UPLOAD_MIME_TYPES as readonly string[]).includes(type);
+  return VIDEO_EXT.test(name) || IMAGE_EXT.test(name);
+}
+
 export interface ProductItem {
   name: string;
   description: string;

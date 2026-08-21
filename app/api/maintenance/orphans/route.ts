@@ -17,10 +17,18 @@ export const dynamic = 'force-dynamic';
  *
  *   GET    ?token=...            지울 대상 미리보기 (아무것도 지우지 않음)
  *   DELETE ?token=...&confirm=1  실제 삭제
+ *   ...&graceMinutes=N           방금 올린 파일을 보호하는 유예 시간 (기본 24시간)
  */
 
-/** 방금 업로드한 사진이 아직 저장 전일 수 있으므로 이 시간 안에 만들어진 파일은 건드리지 않는다 */
-const GRACE_MINUTES = 10;
+/**
+ * 아직 저장 전인 파일을 지우지 않기 위한 유예 시간.
+ *
+ * 파일은 고르는 즉시 올라가지만 [저장] 은 폼을 다 채운 뒤에 눌린다. 그 사이 파일은
+ * 어디에서도 참조되지 않아 "고아" 로 보인다. 영상이 들어오면서 이 간격이 훨씬 길어졌다
+ * (50MB 업로드 + 업종별 필드 작성). 10분으로는 작성 중인 영상을 지울 수 있어 하루로 둔다.
+ * 급히 방금 올린 테스트 파일을 지워야 하면 ?graceMinutes=0 으로 줄일 수 있다.
+ */
+const DEFAULT_GRACE_MINUTES = 24 * 60;
 
 function authorize(request: Request): NextResponse | null {
   const expected = process.env.MAINTENANCE_TOKEN;
@@ -49,9 +57,16 @@ async function referencedPaths(): Promise<Set<string>> {
   return collectBucketPaths(vendors);
 }
 
-async function survey() {
+function graceMinutesFrom(request: Request): number {
+  const raw = new URL(request.url).searchParams.get('graceMinutes');
+  if (raw === null) return DEFAULT_GRACE_MINUTES;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_GRACE_MINUTES;
+}
+
+async function survey(graceMinutes: number) {
   const [objects, referenced] = await Promise.all([listAllObjects(), referencedPaths()]);
-  const cutoff = Date.now() - GRACE_MINUTES * 60 * 1000;
+  const cutoff = Date.now() - graceMinutes * 60 * 1000;
 
   const orphans: typeof objects = [];
   let recentlyUploaded = 0;
@@ -74,6 +89,7 @@ async function survey() {
     고아파일: orphans.length,
     고아용량MB: +(bytes(orphans) / 1024 / 1024).toFixed(2),
     최근업로드제외: recentlyUploaded,
+    유예시간분: graceMinutes,
     orphans,
   };
 }
@@ -83,7 +99,7 @@ export async function GET(request: Request) {
   if (denied) return denied;
 
   try {
-    const result = await survey();
+    const result = await survey(graceMinutesFrom(request));
     return NextResponse.json({
       ok: true,
       mode: 'preview',
@@ -104,7 +120,7 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    const result = await survey();
+    const result = await survey(graceMinutesFrom(request));
     const removed = await deleteObjectPaths(result.orphans.map((o) => o.path));
     return NextResponse.json({
       ok: true,

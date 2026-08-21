@@ -267,6 +267,21 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
             </div>
           )}
 
+          {/* 업종을 바꾸면 그 업종 전용 사진·영상은 화면에서 사라지지만 데이터는 보존된다.
+              보이지 않으면 지울 수도 없어 저장 용량만 차지하므로, 남아 있다는 사실을 알린다. */}
+          {category !== 'video' && state.videos.length > 0 && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              이 업체에는 이전에 올린 샘플 영상 {state.videos.length}개가 남아 있습니다. 업종을 [영상(DVD)]
+              으로 바꾸면 보이고, 거기서 지울 수 있습니다.
+            </p>
+          )}
+          {category !== 'dress' && state.dressPhotos.length > 0 && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              이 업체에는 이전에 올린 드레스 사진 {state.dressPhotos.length}장이 남아 있습니다. 업종을
+              [드레스] 로 바꾸면 보이고, 거기서 지울 수 있습니다.
+            </p>
+          )}
+
           {category === 'video' && (
             <div className="space-y-1.5">
               <Label className="text-sm font-medium">샘플 영상</Label>

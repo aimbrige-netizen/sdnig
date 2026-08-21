@@ -2,7 +2,7 @@
 // public/ 폴더는 빌드 이후 추가된 파일을 프로덕션 모드에서 서빙하지 않으므로
 // .uploads/ 폴더의 파일을 이 라우트가 직접 반환합니다.
 import { NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
 import path from 'path';
 import { LOCAL_UPLOAD_ROOT } from '@/lib/storage';
 
@@ -24,7 +24,7 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webm': 'video/webm',
 };
 
-export async function GET(_request: Request, context: { params: Promise<{ path: string[] }> }) {
+export async function GET(request: Request, context: { params: Promise<{ path: string[] }> }) {
   const { path: segments } = await context.params;
 
   const filePath = path.join(LOCAL_UPLOAD_ROOT, ...segments);
@@ -38,13 +38,49 @@ export async function GET(_request: Request, context: { params: Promise<{ path: 
     return NextResponse.json({ error: '지원하지 않는 파일 형식입니다.' }, { status: 400 });
   }
 
+  let size: number;
+  try {
+    size = (await stat(filePath)).size;
+  } catch {
+    return NextResponse.json({ error: '파일을 찾을 수 없습니다.' }, { status: 404 });
+  }
+
+  const baseHeaders = {
+    'Content-Type': contentType,
+    'Cache-Control': 'public, max-age=31536000, immutable',
+    // 브라우저는 <video> 를 재생·탐색할 때 Range 요청을 쓴다. 이 헤더가 없으면 영상이
+    // 아예 재생되지 않거나 중간으로 건너뛸 수 없다.
+    'Accept-Ranges': 'bytes',
+  };
+
+  const range = request.headers.get('range');
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    if (!m || (m[1] === '' && m[2] === '')) {
+      return new NextResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+    }
+    // 'bytes=-500' 은 마지막 500바이트를 뜻한다
+    const start = m[1] === '' ? Math.max(0, size - Number(m[2])) : Number(m[1]);
+    const end = m[1] === '' ? size - 1 : m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+      return new NextResponse(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+    }
+    const data = await readFile(filePath);
+    const slice = new Uint8Array(data.subarray(start, end + 1));
+    return new NextResponse(slice, {
+      status: 206,
+      headers: {
+        ...baseHeaders,
+        'Content-Range': `bytes ${start}-${end}/${size}`,
+        'Content-Length': String(slice.byteLength),
+      },
+    });
+  }
+
   try {
     const data = await readFile(filePath);
     return new NextResponse(new Uint8Array(data), {
-      headers: {
-        'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
-      },
+      headers: { ...baseHeaders, 'Content-Length': String(size) },
     });
   } catch {
     return NextResponse.json({ error: '파일을 찾을 수 없습니다.' }, { status: 404 });
