@@ -2,14 +2,14 @@
 // 클라이언트(저장 전)와 서버(API)에서 동일하게 사용합니다.
 
 import { z } from 'zod';
-import { CATEGORY_CODES, type CategoryCode } from './constants';
+import { CATEGORY_CODES, PHOTO_TYPES, type CategoryCode } from './constants';
 import { categoryDataSchema } from './category-schema';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const photoSchema = z.object({
   url: z.string().min(1),
-  type: z.enum(['main', 'gallery', 'dress']),
+  type: z.enum(PHOTO_TYPES),
   label: z.string().optional(),
   sortOrder: z.number().int().nonnegative(),
 });

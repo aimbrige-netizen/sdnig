@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { categoryLabel, type CategoryCode } from '@/lib/constants';
+import { categoryLabel, MAX_UPLOAD_BYTES, type CategoryCode } from '@/lib/constants';
 import { vendorPayloadSchema } from '@/lib/vendor-schema';
 import { CategoryFieldsForm } from './category-fields-form';
 import { CommonFieldsForm } from './common-fields-form';
@@ -20,7 +20,7 @@ import {
   type VendorFormState,
   type VendorPrefill,
 } from './form-state';
-import { MainPhotoField, PhotoListField } from './photo-uploader';
+import { MainPhotoField, PhotoListField, VideoListField } from './photo-uploader';
 import { BrandLoaderOverlay } from '@/components/brand-loader';
 import { deleteContract } from '@/app/contracts/actions';
 
@@ -39,6 +39,8 @@ const FIELD_LABELS: Record<string, string> = {
   photos: '대표사진',
   categoryData: '업종별 정보',
 };
+
+const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
 
 type TabKey = 'common' | 'category' | 'photos';
 
@@ -193,7 +195,7 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
           <TabsTrigger value="category">
             업종별 정보{category ? ` (${categoryLabel(category)})` : ''}
           </TabsTrigger>
-          <TabsTrigger value="photos">사진관리</TabsTrigger>
+          <TabsTrigger value="photos">{category === 'video' ? '사진·영상 관리' : '사진관리'}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="common" className="card-surface p-4 sm:p-6">
@@ -246,6 +248,22 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
                 onUpdate={(updater) => setState((prev) => ({ ...prev, dressPhotos: updater(prev.dressPhotos) }))}
                 withLabel
                 labelPlaceholder="드레스명 / 라인 (예: 머메이드 라인)"
+              />
+            </div>
+          )}
+
+          {category === 'video' && (
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">샘플 영상</Label>
+              <p className="text-xs text-muted-foreground">
+                mp4 · mov · webm 을 올릴 수 있고, 한 개당 최대 {MAX_UPLOAD_MB}MB 입니다. 영상마다
+                제목을 입력해주세요. 용량이 넘으면 휴대폰 갤러리에서 화질을 낮춰 내보내거나 길이를
+                잘라서 올려주세요. 아이폰 영상(.mov)은 저장은 되지만 크롬에서 미리보기가 안 되니,
+                가능하면 mp4 로 내보내 올리는 편이 좋습니다.
+              </p>
+              <VideoListField
+                videos={state.videos}
+                onUpdate={(updater) => setState((prev) => ({ ...prev, videos: updater(prev.videos) }))}
               />
             </div>
           )}

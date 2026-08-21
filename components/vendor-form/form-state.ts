@@ -52,6 +52,8 @@ export interface VendorFormState {
   mainPhoto: string | null;
   galleryPhotos: PhotoRow[];
   dressPhotos: PhotoRow[];
+  /** 영상(DVD) 업종 샘플 영상 — url + 영상 제목(label) */
+  videos: PhotoRow[];
 }
 
 /** 서버로 보내는 페이로드 (lib/vendor-schema.ts 로 검증) */
@@ -169,6 +171,7 @@ export function initialFormState(): VendorFormState {
     mainPhoto: null,
     galleryPhotos: [],
     dressPhotos: [],
+    videos: [],
   };
 }
 
@@ -320,6 +323,10 @@ export function serializeForm(state: VendorFormState): VendorPayloadInput {
   for (const p of state.dressPhotos) {
     photos.push({ url: p.url, type: 'dress', label: p.label.trim() || undefined, sortOrder: order++ });
   }
+  // 영상도 같은 이유로 카테고리와 무관하게 보존한다 (UI에서는 영상(DVD) 업종일 때만 표시)
+  for (const v of state.videos) {
+    photos.push({ url: v.url, type: 'video', label: v.label.trim() || undefined, sortOrder: order++ });
+  }
 
   return {
     name: state.name.trim(),
@@ -405,6 +412,7 @@ export function formStateFromVendor(vendor: VendorDTO): VendorFormState {
   state.mainPhoto = sorted.find((p) => p.type === 'main')?.url ?? null;
   state.galleryPhotos = sorted.filter((p) => p.type === 'gallery').map((p) => ({ url: p.url, label: p.label ?? '' }));
   state.dressPhotos = sorted.filter((p) => p.type === 'dress').map((p) => ({ url: p.url, label: p.label ?? '' }));
+  state.videos = sorted.filter((p) => p.type === 'video').map((p) => ({ url: p.url, label: p.label ?? '' }));
 
   return state;
 }
