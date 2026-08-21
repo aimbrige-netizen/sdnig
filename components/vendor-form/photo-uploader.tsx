@@ -3,14 +3,43 @@
 // 사진·영상 업로드 UI
 // (기획서 9절 — 대표사진 1장 필수, 갤러리/드레스 다중 업로드 + 정렬 + 드레스 라벨,
 //  영상(DVD) 업종은 샘플 영상 업로드)
-import { useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_UPLOAD_BYTES, VIDEO_MIME_TYPES, isVideoMime } from '@/lib/constants';
 import type { PhotoRow } from './form-state';
 
 const MAX_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
-const VIDEO_ACCEPT = VIDEO_MIME_TYPES.join(',');
+// 'video/*' 를 함께 넣는다 — 휴대폰 파일선택기가 구체적 MIME 목록만으로는 영상을 회색 처리하는
+// 경우가 있어서, 넓은 패턴을 같이 줘야 갤러리에서 영상이 선택 가능해진다.
+const VIDEO_ACCEPT = ['video/*', ...VIDEO_MIME_TYPES].join(',');
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|qt)$/i;
+const IMAGE_EXT_RE = /\.(jpe?g|png|webp|gif|avif|heic|heif)$/i;
+/** 한 번에 고를 수 있는 개수 — 실수로 폴더째 넣어 무료 용량을 통째로 태우는 것을 막는다 */
+const MAX_FILES_PER_DROP = 30;
+
+/**
+ * 업로드가 진행 중인지 폼 전체에 알리기 위한 통로.
+ *
+ * 업로드 상태는 Dropzone 안에만 있었기 때문에, 50MB 영상이 올라가는 도중에도 [저장] 버튼이
+ * 눌렸다. 그러면 아직 URL 이 없는 영상은 저장 내용에서 빠지고, 파일만 저장소에 남아 나중에
+ * 고아로 지워진다 — 사용자 눈에는 "올렸는데 사라졌다" 로 보인다.
+ * Dropzone 이 시작·종료 시점에 카운터를 올리고 내려서 폼이 저장을 막을 수 있게 한다.
+ */
+export const UploadBusyContext = createContext<((delta: number) => void) | null>(null);
+
+/** 업로드 중 브라우저를 닫거나 새로고침하면 전송 중인 파일이 사라지므로 확인을 받는다 */
+export function useWarnBeforeUnload(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [active]);
+}
 
 /** 사람이 읽는 용량 표기 */
 function humanSize(bytes: number): string {
@@ -19,16 +48,33 @@ function humanSize(bytes: number): string {
 }
 
 /**
+ * 파일이 영상인지 판정한다.
+ *
+ * 일부 안드로이드 기기·브라우저는 File.type 을 빈 문자열로 준다. MIME 만 보고 막으면
+ * 멀쩡한 영상이 "영상 파일만 올릴 수 있습니다" 로 거부되므로, 비어 있을 때는 확장자로 판단한다.
+ */
+function looksLikeVideo(file: File): boolean {
+  if (file.type) return isVideoMime(file.type) || file.type.startsWith('video/');
+  return VIDEO_EXT_RE.test(file.name);
+}
+
+function looksLikeImage(file: File): boolean {
+  if (file.type) return file.type.startsWith('image/');
+  return IMAGE_EXT_RE.test(file.name);
+}
+
+/**
  * 고르자마자 걸러낼 수 있는 문제를 미리 확인한다.
  * 50MB 짜리를 다 올려보고 나서 거절당하면 시간만 버리므로, 서버에 묻기 전에 여기서 막는다.
  */
 function preflight(file: File, accept: 'image' | 'video'): string | null {
-  const isVideo = isVideoMime(file.type);
-  if (accept === 'video' && !isVideo) {
+  if (accept === 'video' && !looksLikeVideo(file)) {
     return `${file.name}: 영상 파일만 올릴 수 있습니다 (mp4, mov, webm).`;
   }
-  if (accept === 'image' && isVideo) {
-    return `${file.name}: 사진 파일만 올릴 수 있습니다. 영상은 영상 항목에 올려주세요.`;
+  if (accept === 'image' && !looksLikeImage(file)) {
+    return looksLikeVideo(file)
+      ? `${file.name}: 사진 자리입니다. 영상은 [샘플 영상] 항목에 올려주세요.`
+      : `${file.name}: 사진 파일만 올릴 수 있습니다 (jpg, png, webp, gif, avif).`;
   }
   if (file.size === 0) return `${file.name}: 빈 파일입니다.`;
   if (file.size > MAX_UPLOAD_BYTES) {
@@ -46,37 +92,60 @@ function preflight(file: File, accept: 'image' | 'video'): string | null {
 function putWithProgress(
   url: string,
   body: FormData,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (fraction: number) => void,
+  register?: (abort: () => void) => void
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
     xhr.setRequestHeader('x-upsert', 'false');
+    // 타임아웃이 없으면 끊긴 회선에서 요청이 영원히 매달려 업로드 영역이 잠긴 채로 남는다.
+    // 50MB 를 아주 느린 회선으로 올리는 경우까지 감안해 넉넉히 잡는다.
+    xhr.timeout = 10 * 60 * 1000;
+    register?.(() => xhr.abort());
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress?.(e.loaded, e.total);
+      // e.total 은 파일이 아니라 멀티파트 본문 크기다. 파일 바이트와 섞으면 100% 에 먼저
+      // 도달하므로, 이 요청 안에서의 비율(0~1)로만 넘긴다.
+      if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total);
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`HTTP ${xhr.status}`));
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1);
+        resolve();
+      } else {
+        // Supabase 가 돌려준 사유를 살려야 "재시도하면 되는 실패"와 아닌 것을 구분할 수 있다
+        let detail = `HTTP ${xhr.status}`;
+        try {
+          const parsed = JSON.parse(xhr.responseText) as { message?: string; error?: string };
+          if (parsed?.message || parsed?.error) detail = String(parsed.message ?? parsed.error);
+        } catch { /* 본문이 JSON 이 아니면 상태 코드만 */ }
+        reject(new UploadError(detail, xhr.status));
+      }
     };
-    xhr.onerror = () => reject(new Error('network'));
-    xhr.ontimeout = () => reject(new Error('timeout'));
-    xhr.onabort = () => reject(new Error('aborted'));
+    xhr.onerror = () => reject(new UploadError('네트워크 연결이 끊겼습니다', 0));
+    xhr.ontimeout = () => reject(new UploadError('시간이 너무 오래 걸려 중단했습니다', 0));
+    xhr.onabort = () => reject(new UploadError('취소됨', -1));
     xhr.send(body);
   });
 }
 
-/**
- * 파일 1개를 올리고 저장된 URL을 돌려준다.
- *
- * 원본 그대로 보관한다. 나중에 앱 화면에서 크게 보여줘야 하는데 한 번 줄여서 올리면 되돌릴
- * 방법이 없기 때문이다. (표시용 축소본이 필요해지면 보관된 원본에서 언제든 만들 수 있다.)
- *
- * 원본을 보관하려면 서버를 거치면 안 된다. Vercel 함수는 요청 본문이 약 4.5MB 로 제한돼
- * 그보다 큰 파일은 업로드 자체가 실패하고, 통과하더라도 같은 파일이 브라우저→함수→Storage 로
- * 두 번 이동해 그만큼 느려진다. 영상은 수십 MB 라 이 경로가 특히 중요하다.
- */
-async function uploadOne(file: File, onProgress?: (loaded: number, total: number) => void): Promise<string> {
+class UploadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+  get canceled() {
+    return this.status === -1;
+  }
+}
+
+async function uploadOne(
+  file: File,
+  onProgress?: (fraction: number) => void,
+  register?: (abort: () => void) => void
+): Promise<string> {
   const ticket = await fetch('/api/upload-url', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -96,7 +165,7 @@ async function uploadOne(file: File, onProgress?: (loaded: number, total: number
     if (!res.ok || !data?.url) {
       throw new Error(data?.error ?? `업로드 실패 (${file.name})`);
     }
-    onProgress?.(file.size, file.size);
+    onProgress?.(1);
     return data.url as string;
   }
 
@@ -105,9 +174,11 @@ async function uploadOne(file: File, onProgress?: (loaded: number, total: number
   body.append('cacheControl', '3600');
   body.append('', file);
   try {
-    await putWithProgress(issued.signedUrl, body, onProgress);
-  } catch {
-    throw new Error(`업로드 실패 (${file.name}) — 잠시 후 다시 시도해주세요.`);
+    await putWithProgress(issued.signedUrl, body, onProgress, register);
+  } catch (e) {
+    if (e instanceof UploadError && e.canceled) throw e;
+    const why = e instanceof Error ? e.message : '알 수 없는 오류';
+    throw new Error(`업로드 실패 (${file.name}) — ${why}`);
   }
   return issued.publicUrl as string;
 }
@@ -129,26 +200,39 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; percent: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const abortsRef = useRef<Set<() => void>>(new Set());
+  const canceledRef = useRef(false);
+  const bumpBusy = useContext(UploadBusyContext);
   const isVideoZone = kind === 'video';
 
   async function handleFiles(fileList: FileList | null) {
     if (uploading) return; // 업로드 중 재진입 방지
     if (!fileList || fileList.length === 0) return;
-    const picked = multiple ? Array.from(fileList) : [fileList[0]];
+    let picked = multiple ? Array.from(fileList) : [fileList[0]];
+
+    const notices: string[] = [];
+    if (picked.length > MAX_FILES_PER_DROP) {
+      notices.push(
+        `한 번에 ${MAX_FILES_PER_DROP}개까지 올릴 수 있습니다. 앞의 ${MAX_FILES_PER_DROP}개만 올리고 나머지 ${picked.length - MAX_FILES_PER_DROP}개는 제외했습니다.`
+      );
+      picked = picked.slice(0, MAX_FILES_PER_DROP);
+    }
 
     // 올리기 전에 거를 수 있는 건 여기서 거른다 (드래그로는 accept 를 우회할 수 있다)
-    const rejected: string[] = [];
     const files = picked.filter((f) => {
       const problem = preflight(f, kind);
-      if (problem) rejected.push(problem);
+      if (problem) notices.push(problem);
       return !problem;
     });
     if (files.length === 0) {
-      if (rejected.length > 0) alert(rejected.join('\n'));
+      if (notices.length > 0) alert(notices.join('\n'));
       return;
     }
 
+    canceledRef.current = false;
+    abortsRef.current.clear();
     setUploading(true);
+    bumpBusy?.(1);
     setProgress({ done: 0, total: files.length, percent: 0 });
 
     // 한 개씩 순서대로 올리면 개수만큼 대기 시간이 곱해진다(10장이면 10배).
@@ -156,35 +240,46 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
     // 4개를 동시에 밀어넣으면 회선을 다 먹고 오히려 느려져서 2개로 낮춘다.
     const CONCURRENCY = isVideoZone ? 2 : 4;
     const results: (string | null)[] = new Array(files.length).fill(null);
-    const errors: string[] = [...rejected];
-    const sentPerFile = new Array(files.length).fill(0);
+    const errors: string[] = [...notices];
+    // 파일별 전송 비율(0~1). 크기로 가중해 큰 파일이 진행률을 지배하도록 한다.
+    const fractions = new Array(files.length).fill(0);
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
     let next = 0;
     let done = 0;
 
     const report = () => {
-      const sent = sentPerFile.reduce((a: number, b: number) => a + b, 0);
+      const sent = files.reduce((acc, f, i) => acc + f.size * fractions[i], 0);
       setProgress({
         done,
         total: files.length,
-        percent: totalBytes > 0 ? Math.min(100, Math.round((sent / totalBytes) * 100)) : 0,
+        percent: totalBytes > 0 ? Math.min(100, Math.floor((sent / totalBytes) * 100)) : 0,
       });
     };
 
     async function worker() {
       while (true) {
         const i = next++;
-        if (i >= files.length) return;
+        if (i >= files.length || canceledRef.current) return;
+        let abort: (() => void) | null = null;
         try {
-          results[i] = await uploadOne(files[i], (loaded) => {
-            sentPerFile[i] = loaded;
-            report();
-          });
-          sentPerFile[i] = files[i].size;
+          results[i] = await uploadOne(
+            files[i],
+            (fraction) => {
+              fractions[i] = fraction;
+              report();
+            },
+            (fn) => {
+              abort = fn;
+              abortsRef.current.add(fn);
+            }
+          );
+          fractions[i] = 1;
         } catch (e) {
-          sentPerFile[i] = files[i].size; // 실패해도 진행률이 멈춰 보이지 않도록
-          errors.push(e instanceof Error ? e.message : String(e));
+          fractions[i] = 1; // 실패해도 진행률이 멈춰 보이지 않도록
+          const canceled = e instanceof UploadError && e.canceled;
+          if (!canceled) errors.push(e instanceof Error ? e.message : String(e));
         } finally {
+          if (abort) abortsRef.current.delete(abort);
           done += 1;
           report();
         }
@@ -194,11 +289,23 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, files.length) }, worker));
 
     setUploading(false);
+    bumpBusy?.(-1);
     setProgress(null);
+    abortsRef.current.clear();
     // 고른 순서를 유지해서 넘긴다 (동시에 올려도 순서가 뒤섞이지 않도록)
     const urls = results.filter((u): u is string => u !== null);
     if (urls.length > 0) onUploaded(urls);
+    if (canceledRef.current) {
+      canceledRef.current = false;
+      return; // 사용자가 직접 멈춘 것이므로 오류로 알리지 않는다
+    }
     if (errors.length > 0) alert(errors.join('\n'));
+  }
+
+  function cancelAll() {
+    canceledRef.current = true;
+    for (const abort of abortsRef.current) abort();
+    abortsRef.current.clear();
   }
 
   function statusText() {
@@ -209,52 +316,84 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={ariaLabel}
-      aria-busy={uploading}
-      onClick={() => inputRef.current?.click()}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        handleFiles(e.dataTransfer.files);
-      }}
-      className={`flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed text-center text-sm transition-colors ${
-        compact ? 'p-1' : 'p-6'
-      } ${dragOver ? 'border-neutral-900 bg-neutral-100' : 'border-neutral-300 bg-white hover:bg-neutral-50'} ${className ?? ''}`}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept={isVideoZone ? VIDEO_ACCEPT : 'image/*'}
-        multiple={multiple}
-        className="hidden"
-        onChange={(e) => {
-          handleFiles(e.target.files);
-          e.target.value = '';
+    <div className="space-y-2">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={ariaLabel ?? (isVideoZone ? `영상 업로드, 개당 최대 ${MAX_MB}MB` : '사진 업로드')}
+        aria-disabled={uploading}
+        aria-busy={uploading}
+        onClick={() => {
+          if (!uploading) inputRef.current?.click();
         }}
-      />
-      {uploading ? (
-        <span className="text-muted-foreground" role="status">
-          {statusText()}
-        </span>
-      ) : (
-        (children ?? (
-          <span className="text-muted-foreground">
-            {isVideoZone
-              ? `클릭 또는 드래그하여 영상 업로드 (개당 최대 ${MAX_MB}MB)`
-              : '클릭 또는 드래그하여 사진 업로드'}
-          </span>
-        ))
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault(); // Space 로 페이지가 스크롤되는 것을 막는다
+            if (!uploading) inputRef.current?.click();
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!uploading) setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+        className={`flex items-center justify-center rounded-lg border-2 border-dashed text-center text-sm transition-colors ${
+          compact ? 'p-1' : 'p-6'
+        } ${
+          uploading
+            ? 'cursor-progress border-neutral-300 bg-neutral-50'
+            : dragOver
+              ? 'cursor-pointer border-neutral-900 bg-neutral-100'
+              : 'cursor-pointer border-neutral-300 bg-white hover:bg-neutral-50'
+        } ${className ?? ''}`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept={isVideoZone ? VIDEO_ACCEPT : 'image/*'}
+          multiple={multiple}
+          className="hidden"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+        {uploading ? (
+          <span className="text-muted-foreground">{statusText()}</span>
+        ) : (
+          (children ?? (
+            <span className="text-muted-foreground">
+              {isVideoZone
+                ? `클릭 또는 드래그하여 영상 업로드 (개당 최대 ${MAX_MB}MB)`
+                : '클릭 또는 드래그하여 사진 업로드'}
+            </span>
+          ))
+        )}
+      </div>
+
+      {/* 진행률은 매 틱 갱신돼 스크린리더가 숫자만 계속 읽게 되므로 라이브 리전에서 제외하고,
+          시작/종료만 한 번씩 알린다 */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {uploading ? `업로드를 시작했습니다. 총 ${progress?.total ?? 1}개.` : ''}
+      </p>
+
+      {uploading && !compact && (
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-200">
+            <div
+              className="h-full rounded-full bg-neutral-900 transition-[width] duration-200"
+              style={{ width: `${progress?.percent ?? 0}%` }}
+            />
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={cancelAll}>
+            취소
+          </Button>
+        </div>
       )}
     </div>
   );
@@ -426,11 +565,13 @@ function VideoThumb({ url }: { url: string }) {
 
   if (failed) {
     return (
-      <div className="flex h-24 w-40 shrink-0 flex-col items-center justify-center gap-1 rounded-md border bg-neutral-50 p-2 text-center">
+      <div className="flex h-24 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-md border bg-neutral-50 p-2 text-center sm:w-40">
         <span className="text-[11px] leading-tight text-muted-foreground">
-          {isMov ? '이 브라우저는 .mov 미리보기를 지원하지 않습니다' : '미리보기를 지원하지 않는 형식입니다'}
+          {isMov ? '이 브라우저는 .mov 미리보기를 지원하지 않습니다' : '미리보기를 열지 못했습니다'}
         </span>
-        <span className="text-[11px] text-muted-foreground">파일은 정상 저장됨</span>
+        <span className="text-[11px] text-muted-foreground">
+          {isMov ? '파일은 정상 저장됨' : '형식 문제이거나 아직 전송 중일 수 있습니다'}
+        </span>
         <a
           href={url}
           target="_blank"
@@ -450,7 +591,7 @@ function VideoThumb({ url }: { url: string }) {
       controls
       preload="metadata"
       onError={() => setFailed(true)}
-      className="h-24 w-40 shrink-0 rounded-md border bg-black object-contain"
+      className="h-24 w-full shrink-0 rounded-md border bg-black object-contain sm:w-40"
     />
   );
 }
@@ -474,6 +615,13 @@ export function VideoListField({ videos, onUpdate }: VideoListFieldProps) {
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+    // 순서를 바꾸면 버튼이 다시 그려지며 포커스가 body 로 날아간다.
+    // 키보드로 연속해서 옮길 수 있도록 옮겨간 자리의 같은 버튼으로 포커스를 되돌린다.
+    requestAnimationFrame(() => {
+      const dir = delta < 0 ? 'up' : 'down';
+      const el = document.querySelector<HTMLButtonElement>(`[data-video-move="${dir}-${index + delta}"]`);
+      el?.focus();
+    });
   }
 
   return (
@@ -481,52 +629,70 @@ export function VideoListField({ videos, onUpdate }: VideoListFieldProps) {
       <Dropzone
         multiple
         kind="video"
-        ariaLabel="영상 업로드"
         onUploaded={(urls) => onUpdate((prev) => [...prev, ...urls.map((url) => ({ url, label: '' }))])}
       />
       {videos.length > 0 && (
         <ul className="space-y-2">
-          {videos.map((video, i) => (
-            <li key={`${video.url}-${i}`} className="flex items-center gap-3 rounded-lg border bg-white p-2">
-              <VideoThumb url={video.url} />
-              <div className="min-w-0 flex-1">
-                <Input
-                  value={video.label}
-                  onChange={(e) => {
-                    const label = e.target.value;
-                    onUpdate((prev) => prev.map((v, idx) => (idx === i ? { ...v, label } : v)));
-                  }}
-                  placeholder="영상 제목 (예: 본식 하이라이트)"
-                />
-                <span className="mt-1 block truncate text-xs text-muted-foreground">{video.url}</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button type="button" variant="outline" size="sm" onClick={() => move(i, -1)} disabled={i === 0} title="위로">
-                  ↑
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => move(i, 1)}
-                  disabled={i === videos.length - 1}
-                  title="아래로"
-                >
-                  ↓
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive"
-                  onClick={() => onUpdate((prev) => prev.filter((_, idx) => idx !== i))}
-                  title="삭제"
-                >
-                  ✕
-                </Button>
-              </div>
-            </li>
-          ))}
+          {videos.map((video, i) => {
+            const name = video.label.trim() || `영상 ${i + 1}`;
+            return (
+              <li
+                key={`${video.url}-${i}`}
+                className="flex flex-col gap-3 rounded-lg border bg-white p-2 sm:flex-row sm:items-center"
+              >
+                <VideoThumb url={video.url} />
+                <div className="min-w-0 flex-1">
+                  <Input
+                    value={video.label}
+                    aria-label={`${i + 1}번째 영상 제목`}
+                    onChange={(e) => {
+                      const label = e.target.value;
+                      onUpdate((prev) => prev.map((v, idx) => (idx === i ? { ...v, label } : v)));
+                    }}
+                    placeholder="영상 제목 (예: 본식 하이라이트)"
+                  />
+                  <span className="mt-1 block truncate text-xs text-muted-foreground">{video.url}</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-video-move={`up-${i}`}
+                    onClick={() => move(i, -1)}
+                    disabled={i === 0}
+                    aria-label={`${name} 위로 이동`}
+                  >
+                    <span aria-hidden="true">↑</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    data-video-move={`down-${i}`}
+                    onClick={() => move(i, 1)}
+                    disabled={i === videos.length - 1}
+                    aria-label={`${name} 아래로 이동`}
+                  >
+                    <span aria-hidden="true">↓</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive"
+                    aria-label={`${name} 삭제`}
+                    onClick={() => {
+                      if (!confirm(`"${name}" 을(를) 목록에서 뺄까요?`)) return;
+                      onUpdate((prev) => prev.filter((_, idx) => idx !== i));
+                    }}
+                  >
+                    <span aria-hidden="true">✕</span>
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

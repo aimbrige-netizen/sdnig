@@ -2,7 +2,7 @@
 
 // 업체 등록/수정 폼 (기획서 10절 — [공통정보] [업종별 정보] [사진관리] 3개 탭 + 저장 버튼)
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,7 +20,13 @@ import {
   type VendorFormState,
   type VendorPrefill,
 } from './form-state';
-import { MainPhotoField, PhotoListField, VideoListField } from './photo-uploader';
+import {
+  MainPhotoField,
+  PhotoListField,
+  UploadBusyContext,
+  VideoListField,
+  useWarnBeforeUnload,
+} from './photo-uploader';
 import { BrandLoaderOverlay } from '@/components/brand-loader';
 import { deleteContract } from '@/app/contracts/actions';
 
@@ -82,6 +88,14 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // 업로드가 하나라도 진행 중이면 저장을 막는다. 아직 URL 이 없는 사진·영상은 저장 내용에서
+  // 빠지는데, 파일은 이미 저장소에 올라가 있어 "올렸는데 사라졌다" 가 되기 때문이다.
+  const [uploadCount, setUploadCount] = useState(0);
+  const bumpUpload = useCallback((delta: number) => {
+    setUploadCount((c) => Math.max(0, c + delta));
+  }, []);
+  const uploading = uploadCount > 0;
+  useWarnBeforeUnload(uploading);
   const [activeTab, setActiveTab] = useState<TabKey>('common');
 
   // 함수 형태도 허용 — 비동기 작업(사진 업로드 등)이 끝난 시점의 최신 state를 기준으로
@@ -161,6 +175,7 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
   }
 
   return (
+    <UploadBusyContext.Provider value={bumpUpload}>
     <div className="space-y-4">
       {(saving || deleting) && <BrandLoaderOverlay label={deleting ? '삭제 중' : '저장 중'} />}
 
@@ -190,12 +205,12 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
       )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
-        <TabsList className="w-full justify-start">
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="common">공통정보</TabsTrigger>
           <TabsTrigger value="category">
             업종별 정보{category ? ` (${categoryLabel(category)})` : ''}
           </TabsTrigger>
-          <TabsTrigger value="photos">{category === 'video' ? '사진·영상 관리' : '사진관리'}</TabsTrigger>
+          <TabsTrigger value="photos">{category === 'video' ? '사진·영상' : '사진관리'}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="common" className="card-surface p-4 sm:p-6">
@@ -273,20 +288,31 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
       <div className="flex items-center justify-between">
         <div>
           {isEdit && (
-            <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting || saving}>
+            <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleting || saving || uploading}>
               {deleting ? '삭제 중...' : '삭제'}
             </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
+          {uploading && (
+            <span className="text-xs text-muted-foreground" role="status">
+              업로드가 끝나야 저장할 수 있습니다
+            </span>
+          )}
           <Button type="button" variant="outline" onClick={() => router.push('/vendors')} disabled={saving}>
             취소
           </Button>
-          <Button type="button" onClick={handleSave} disabled={saving || deleting}>
-            {saving ? '저장 중...' : '저장'}
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || deleting || uploading}
+            title={uploading ? '업로드가 끝난 뒤 저장할 수 있습니다' : undefined}
+          >
+            {saving ? '저장 중...' : uploading ? '업로드 중...' : '저장'}
           </Button>
         </div>
       </div>
     </div>
+    </UploadBusyContext.Provider>
   );
 }

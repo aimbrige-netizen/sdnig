@@ -8,6 +8,8 @@ import { LOCAL_UPLOAD_ROOT } from '@/lib/storage';
 
 export const runtime = 'nodejs';
 
+// 업로드가 받는 형식(lib/constants.ts 의 UPLOAD_MIME_TYPES)과 짝이 맞아야 한다.
+// 한쪽만 늘리면 저장은 되는데 서빙이 400 으로 막혀 재생·표시가 전부 실패한다.
 const CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -15,6 +17,11 @@ const CONTENT_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.gif': 'image/gif',
   '.avif': 'image/avif',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/x-m4v',
+  '.mov': 'video/quicktime',
+  '.qt': 'video/quicktime',
+  '.webm': 'video/webm',
 };
 
 export async function GET(_request: Request, context: { params: Promise<{ path: string[] }> }) {

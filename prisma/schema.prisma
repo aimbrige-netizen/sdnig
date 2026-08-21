@@ -40,7 +40,11 @@ model Vendor {
   options            Json? // [{ name, price, desc }]
   sdingBenefit       String?  @db.Text
   categoryData       Json? // 업종별 전용 필드 (기획서 6절)
-  photos             Json? // [{ url, type: "main"|"gallery"|"dress", label, sortOrder }]
+  photos             Json? // [{ url, type: "main"|"gallery"|"dress"|"video", label, sortOrder }]
+  //                          type="video" 는 영상(DVD) 업종의 샘플 영상입니다.
+  //                          사진 URL 은 여기 말고 products[].photos 에도 들어가므로,
+  //                          파일 정리는 필드를 열거하지 말고 lib/storage 의
+  //                          collectBucketPaths() 로 레코드 전체를 훑어야 합니다.
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

@@ -30,16 +30,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '파일 크기를 확인할 수 없습니다.' }, { status: 400 });
   }
   if (size > MAX_UPLOAD_BYTES) {
-    const mb = (size / 1024 / 1024).toFixed(1);
     const kind = isVideoMime(type) ? '영상' : '사진';
+    const limitMb = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
+    // 소수점 첫째 자리에서 반올림하면 50.02MB 가 "50.0MB" 로 보여 "50MB 까지인데 50.0MB 는
+    // 왜 안 되냐" 가 된다. 한도를 넘긴 파일은 항상 올림해서 표시한다.
+    const overMb = (Math.ceil((size / 1024 / 1024) * 10) / 10).toFixed(1);
     return NextResponse.json(
-      { error: `${kind} 한 개는 50MB 까지 올릴 수 있습니다. (선택한 파일 ${mb}MB)` },
+      { error: `${kind} 한 개는 ${limitMb}MB 까지 올릴 수 있습니다. (선택한 파일 약 ${overMb}MB)` },
       { status: 400 }
     );
   }
 
   try {
-    const issued = await createDirectUploadUrl(name);
+    const issued = await createDirectUploadUrl(name, type);
     // Supabase 미설정(로컬 개발) — 호출부가 기존 /api/upload 로 폴백한다
     if (!issued) return NextResponse.json({ ok: true, mode: 'proxy' });
     return NextResponse.json({ ok: true, mode: 'direct', ...issued });

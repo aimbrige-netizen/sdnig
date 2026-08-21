@@ -1,6 +1,6 @@
-// 사진 업로드 저장소 (기획서 9절)
+// 사진·영상 저장소 (기획서 9절)
 // - Supabase Storage 환경변수가 설정되어 있으면 Supabase에 업로드하고 public URL을 반환
-// - 없으면 로컬 개발용 폴백으로 public/uploads 폴더에 저장 (배포 환경에서는 Supabase 필수)
+// - 없으면 로컬 개발용 폴백으로 .uploads/ 폴더에 저장 (배포 환경에서는 Supabase 필수)
 import { createClient } from '@supabase/supabase-js';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
@@ -17,8 +17,30 @@ function supabaseAdmin() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-function safeFileName(original: string): string {
-  const ext = path.extname(original).toLowerCase().replace(/[^a-z0-9.]/g, '') || '.jpg';
+/** MIME 타입 → 확장자 (파일명에 확장자가 없을 때의 폴백) */
+const EXT_BY_MIME: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/avif': '.avif',
+  'video/mp4': '.mp4',
+  'video/x-m4v': '.m4v',
+  'video/quicktime': '.mov',
+  'video/webm': '.webm',
+};
+
+/**
+ * 저장될 파일명을 만든다. 이름은 UUID 로 바꾸고 확장자만 남긴다.
+ *
+ * 확장자가 없거나 이상하면 MIME 으로 보완한다. 예전에는 무조건 '.jpg' 로 떨어져서
+ * 확장자 없는 영상이 .jpg 로 저장됐고, 그러면 서빙 시 content-type 이 image/jpeg 가 돼
+ * 재생되지 않는다.
+ */
+function safeFileName(original: string, mimeType?: string): string {
+  const raw = path.extname(original).toLowerCase().replace(/[^a-z0-9.]/g, '');
+  // 확장자가 지나치게 길면(위조·비정상) 신뢰하지 않는다
+  const ext = raw.length > 1 && raw.length <= 6 ? raw : (mimeType && EXT_BY_MIME[mimeType]) || '.bin';
   return `${crypto.randomUUID()}${ext}`;
 }
 
@@ -39,7 +61,14 @@ export function objectPathFromUrl(url: string): string | null {
   const at = url.indexOf(marker);
   if (at === -1) return null;
   const objectPath = url.slice(at + marker.length).split('?')[0];
-  return objectPath ? decodeURIComponent(objectPath) : null;
+  if (!objectPath) return null;
+  try {
+    return decodeURIComponent(objectPath);
+  } catch {
+    // '%' 가 섞인 잘못된 URL 이면 decodeURIComponent 가 던진다. 여기서 막지 않으면
+    // 업체 삭제와 고아 파일 정리가 통째로 500 이 되어 영영 복구되지 않는다.
+    return objectPath;
+  }
 }
 
 /**
@@ -60,33 +89,6 @@ export function collectBucketPaths(value: unknown, into = new Set<string>()): Se
     for (const v of Object.values(value as Record<string, unknown>)) collectBucketPaths(v, into);
   }
   return into;
-}
-
-/**
- * 사진 URL 목록에 해당하는 Storage 파일을 지운다.
- *
- * 업체나 사진을 지워도 파일이 남아 있으면 앱 어디에서도 안 보이는 채로 용량만 차지한다.
- * 이 버킷의 파일이 아닌 URL(로컬 개발 경로 등)은 조용히 건너뛴다.
- * 삭제 실패가 업체 삭제/수정 자체를 막으면 안 되므로 예외는 삼키고 개수만 돌려준다.
- */
-export async function deleteImages(urls: string[]): Promise<number> {
-  const supabase = supabaseAdmin();
-  if (!supabase) return 0;
-
-  const paths = [...new Set(urls.map(objectPathFromUrl).filter((p): p is string => p !== null))];
-  if (paths.length === 0) return 0;
-
-  try {
-    const { data, error } = await supabase.storage.from(BUCKET).remove(paths);
-    if (error) {
-      console.error('[storage] 사진 삭제 실패:', error.message);
-      return 0;
-    }
-    return data?.length ?? 0;
-  } catch (e) {
-    console.error('[storage] 사진 삭제 중 오류:', e);
-    return 0;
-  }
 }
 
 export interface StoredObject {
@@ -158,12 +160,13 @@ export async function deleteObjectPaths(paths: string[]): Promise<string[]> {
  * Supabase 미설정(로컬 개발)이면 null 을 반환하고, 호출부가 기존 /api/upload 경로로 폴백한다.
  */
 export function createDirectUploadUrl(
-  originalName: string
+  originalName: string,
+  mimeType?: string
 ): Promise<{ signedUrl: string; publicUrl: string } | null> {
   const supabase = supabaseAdmin();
   if (!supabase) return Promise.resolve(null);
 
-  const objectPath = `${datedDir()}/${safeFileName(originalName)}`;
+  const objectPath = `${datedDir()}/${safeFileName(originalName, mimeType)}`;
   return supabase.storage
     .from(BUCKET)
     .createSignedUploadUrl(objectPath)
@@ -177,7 +180,7 @@ export function createDirectUploadUrl(
 }
 
 export async function uploadImage(file: File): Promise<{ url: string }> {
-  const fileName = safeFileName(file.name);
+  const fileName = safeFileName(file.name, file.type);
   const dir = datedDir();
   const buffer = Buffer.from(await file.arrayBuffer());
 
