@@ -27,7 +27,9 @@ export function categoryLabel(code: string): string {
 // 사진 타입 (기획서 9절)
 // 'video' 는 영상(DVD) 업종의 샘플 영상 — 사진과 같은 photos 배열에 type 으로 구분해 담는다.
 // (열을 따로 만들지 않아도 저장·불러오기·파일 정리가 모두 그대로 동작한다)
-export const PHOTO_TYPES = ['main', 'gallery', 'dress', 'video'] as const;
+// 'video_link' 는 파일이 아니라 유튜브·비메오 등 외부 영상 주소다. 우리 버킷의 파일이 아니라서
+// 파일 정리(collectBucketPaths)가 자동으로 건너뛴다 — 링크를 지운다고 남의 영상이 지워지지 않는다.
+export const PHOTO_TYPES = ['main', 'gallery', 'dress', 'video', 'video_link'] as const;
 export type PhotoType = (typeof PHOTO_TYPES)[number];
 
 export interface VendorPhoto {

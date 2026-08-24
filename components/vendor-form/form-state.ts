@@ -54,6 +54,8 @@ export interface VendorFormState {
   dressPhotos: PhotoRow[];
   /** 영상(DVD) 업종 샘플 영상 — url + 영상 제목(label) */
   videos: PhotoRow[];
+  /** 영상(DVD) 업종 샘플 영상 링크 (유튜브 등) — url + 영상 제목(label) */
+  videoLinks: PhotoRow[];
 }
 
 /** 서버로 보내는 페이로드 (lib/vendor-schema.ts 로 검증) */
@@ -172,6 +174,7 @@ export function initialFormState(): VendorFormState {
     galleryPhotos: [],
     dressPhotos: [],
     videos: [],
+    videoLinks: [],
   };
 }
 
@@ -327,6 +330,9 @@ export function serializeForm(state: VendorFormState): VendorPayloadInput {
   for (const v of state.videos) {
     photos.push({ url: v.url, type: 'video', label: v.label.trim() || undefined, sortOrder: order++ });
   }
+  for (const v of state.videoLinks) {
+    photos.push({ url: v.url, type: 'video_link', label: v.label.trim() || undefined, sortOrder: order++ });
+  }
 
   return {
     name: state.name.trim(),
@@ -413,6 +419,9 @@ export function formStateFromVendor(vendor: VendorDTO): VendorFormState {
   state.galleryPhotos = sorted.filter((p) => p.type === 'gallery').map((p) => ({ url: p.url, label: p.label ?? '' }));
   state.dressPhotos = sorted.filter((p) => p.type === 'dress').map((p) => ({ url: p.url, label: p.label ?? '' }));
   state.videos = sorted.filter((p) => p.type === 'video').map((p) => ({ url: p.url, label: p.label ?? '' }));
+  state.videoLinks = sorted
+    .filter((p) => p.type === 'video_link')
+    .map((p) => ({ url: p.url, label: p.label ?? '' }));
 
   return state;
 }

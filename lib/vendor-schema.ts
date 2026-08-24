@@ -4,15 +4,21 @@
 import { z } from 'zod';
 import { CATEGORY_CODES, PHOTO_TYPES, type CategoryCode } from './constants';
 import { categoryDataSchema } from './category-schema';
+import { isValidVideoLink } from './video-links';
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export const photoSchema = z.object({
-  url: z.string().min(1),
-  type: z.enum(PHOTO_TYPES),
-  label: z.string().optional(),
-  sortOrder: z.number().int().nonnegative(),
-});
+export const photoSchema = z
+  .object({
+    url: z.string().min(1),
+    type: z.enum(PHOTO_TYPES),
+    label: z.string().optional(),
+    sortOrder: z.number().int().nonnegative(),
+  })
+  .refine((p) => p.type !== 'video_link' || isValidVideoLink(p.url), {
+    message: '영상 링크는 올바른 주소(http/https)여야 합니다',
+    path: ['url'],
+  });
 
 export const productSchema = z.object({
   name: z.string().trim().min(1, '상품명을 입력해주세요'),

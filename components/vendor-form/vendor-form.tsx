@@ -27,6 +27,7 @@ import {
   VideoListField,
   useWarnBeforeUnload,
 } from './photo-uploader';
+import { VideoLinkField } from './video-link-field';
 import { BrandLoaderOverlay } from '@/components/brand-loader';
 import { deleteContract } from '@/app/contracts/actions';
 
@@ -269,10 +270,10 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
 
           {/* 업종을 바꾸면 그 업종 전용 사진·영상은 화면에서 사라지지만 데이터는 보존된다.
               보이지 않으면 지울 수도 없어 저장 용량만 차지하므로, 남아 있다는 사실을 알린다. */}
-          {category !== 'video' && state.videos.length > 0 && (
+          {category !== 'video' && state.videos.length + state.videoLinks.length > 0 && (
             <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              이 업체에는 이전에 올린 샘플 영상 {state.videos.length}개가 남아 있습니다. 업종을 [영상(DVD)]
-              으로 바꾸면 보이고, 거기서 지울 수 있습니다.
+              이 업체에는 이전에 등록한 샘플 영상 {state.videos.length + state.videoLinks.length}개가 남아
+              있습니다. 업종을 [영상(DVD)] 으로 바꾸면 보이고, 거기서 지울 수 있습니다.
             </p>
           )}
           {category !== 'dress' && state.dressPhotos.length > 0 && (
@@ -284,12 +285,26 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
 
           {category === 'video' && (
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium">샘플 영상</Label>
+              <Label className="text-sm font-medium">샘플 영상 링크</Label>
               <p className="text-xs text-muted-foreground">
-                mp4 · mov · webm 을 올릴 수 있고, 한 개당 최대 {MAX_UPLOAD_MB}MB 입니다. 영상마다
-                제목을 입력해주세요. 용량이 넘으면 휴대폰 갤러리에서 화질을 낮춰 내보내거나 길이를
-                잘라서 올려주세요. 아이폰 영상(.mov)은 저장은 되지만 크롬에서 미리보기가 안 되니,
-                가능하면 mp4 로 내보내 올리는 편이 좋습니다.
+                업체가 유튜브·비메오·네이버TV 에 올려둔 영상이 있으면 주소만 넣어주세요. 길이·용량
+                제한이 없고 저장 공간도 쓰지 않아, 파일로 올리는 것보다 이 쪽이 낫습니다.
+              </p>
+              <VideoLinkField
+                links={state.videoLinks}
+                onUpdate={(updater) => setState((prev) => ({ ...prev, videoLinks: updater(prev.videoLinks) }))}
+              />
+            </div>
+          )}
+
+          {category === 'video' && (
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">샘플 영상 파일</Label>
+              <p className="text-xs text-muted-foreground">
+                링크가 없을 때만 쓰세요. mp4 · mov · webm 을 올릴 수 있고 한 개당 최대
+                {MAX_UPLOAD_MB}MB 입니다 — 휴대폰으로 찍은 원본은 대부분 이 한도를 넘습니다.
+                용량이 넘으면 화질을 낮춰 내보내거나 길이를 잘라주세요. 아이폰 영상(.mov)은 저장은
+                되지만 크롬에서 미리보기가 안 됩니다.
               </p>
               <VideoListField
                 videos={state.videos}
