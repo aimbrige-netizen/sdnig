@@ -5,6 +5,7 @@
 // 파일 업로드는 Supabase 무료 플랜의 파일당 50MB 한도에 걸리고 저장 용량·전송량도 먹는다.
 // 업체가 이미 유튜브 등에 올려둔 샘플 영상이 있으면 주소만 저장하는 편이 제약이 없다.
 
+import Image from 'next/image';
 import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -137,17 +138,9 @@ export function VideoLinkField({ links, onUpdate }: VideoLinkFieldProps) {
                 key={link.url}
                 className="flex flex-col gap-3 rounded-lg border bg-white p-2 sm:flex-row sm:items-center"
               >
-                <div className="flex h-24 w-full shrink-0 items-center justify-center overflow-hidden rounded-md border bg-neutral-100 sm:w-40">
+                <div className="relative flex h-24 w-full shrink-0 items-center justify-center overflow-hidden rounded-md border bg-neutral-100 sm:w-40">
                   {parsed?.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={parsed.thumbnail}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
+                    <Image src={parsed.thumbnail} alt="" fill sizes="160px" className="object-cover" />
                   ) : (
                     <span className="px-2 text-center text-xs text-muted-foreground">
                       {parsed?.label ?? '링크'}

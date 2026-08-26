@@ -1,5 +1,6 @@
 // 업체 리스트 (기획서 10절 — 업종 필터 14개+전체, 썸네일/업체명/업종/지역 표시)
 // + 지역(시/도-구/군) 필터, 최신순/이름순 정렬, 카드/리스트 보기 전환, 등록일 표시
+import Image from 'next/image';
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin-header';
 import { Button } from '@/components/ui/button';
@@ -181,10 +182,15 @@ export default async function VendorsPage({
                   return (
                     <TableRow key={vendor.id}>
                       <TableCell>
-                        <div className="h-10 w-10 overflow-hidden rounded-md bg-neutral-100">
+                        <div className="relative h-10 w-10 overflow-hidden rounded-md bg-neutral-100">
                           {thumb ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={thumb} alt={vendor.name} className="h-full w-full object-cover" />
+                            <Image
+                              src={thumb}
+                              alt={vendor.name}
+                              fill
+                              sizes="40px"
+                              className="object-cover"
+                            />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-[10px] text-neutral-400">
                               없음
@@ -221,10 +227,15 @@ export default async function VendorsPage({
                     href={`/vendors/${vendor.id}`}
                     className="card-surface flex gap-3 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift"
                   >
-                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100">
+                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100">
                       {thumb ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={thumb} alt={vendor.name} className="h-full w-full object-cover" />
+                        <Image
+                          src={thumb}
+                          alt={vendor.name}
+                          fill
+                          sizes="80px"
+                          className="object-cover"
+                        />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-neutral-400">
                           사진 없음

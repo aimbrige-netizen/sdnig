@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_UPLOAD_BYTES, VIDEO_MIME_TYPES, isVideoMime } from '@/lib/constants';
 import type { PhotoRow } from './form-state';
+import { PhotoThumb } from './photo-thumb';
 
 const MAX_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
 // 'video/*' 를 함께 넣는다 — 휴대폰 파일선택기가 구체적 MIME 목록만으로는 영상을 회색 처리하는
@@ -428,8 +429,7 @@ export function MainPhotoField({ value, onChange }: MainPhotoFieldProps) {
     <div className="flex items-start gap-4">
       {value ? (
         <div className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={value} alt="대표사진" className="h-40 w-40 rounded-lg border object-cover" />
+          <PhotoThumb url={value} alt="대표사진" sizes="160px" className="h-40 w-40 rounded-lg border" />
           <Button
             type="button"
             variant="destructive"
@@ -462,8 +462,7 @@ export function ProductPhotosField({ photos, onUpdate }: ProductPhotosFieldProps
     <div className="flex flex-wrap items-center gap-2">
       {photos.map((url, i) => (
         <div key={`${url}-${i}`} className="relative h-14 w-14 shrink-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt={`상품사진 ${i + 1}`} className="h-full w-full rounded-md border object-cover" />
+          <PhotoThumb url={url} alt={`상품사진 ${i + 1}`} sizes="64px" className="h-full w-full rounded-md border" />
           <Button
             type="button"
             variant="destructive"
@@ -518,9 +517,13 @@ export function PhotoListField({ photos, onUpdate, withLabel, labelPlaceholder }
       {photos.length > 0 && (
         <ul className="space-y-2">
           {photos.map((photo, i) => (
-            <li key={`${photo.url}-${i}`} className="flex items-center gap-3 rounded-lg border bg-white p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo.url} alt={photo.label || `사진 ${i + 1}`} className="h-16 w-16 rounded-md border object-cover" />
+            <li key={photo.url} className="flex items-center gap-3 rounded-lg border bg-white p-2">
+              <PhotoThumb
+                url={photo.url}
+                alt={photo.label || `사진 ${i + 1}`}
+                sizes="64px"
+                className="h-16 w-16 shrink-0 rounded-md border"
+              />
               <div className="min-w-0 flex-1">
                 {withLabel ? (
                   <Input
