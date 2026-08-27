@@ -45,13 +45,31 @@ export async function GET(request: Request, context: { params: Promise<{ path: s
     return NextResponse.json({ error: '파일을 찾을 수 없습니다.' }, { status: 404 });
   }
 
-  const baseHeaders = {
+  const baseHeaders: Record<string, string> = {
     'Content-Type': contentType,
     'Cache-Control': 'public, max-age=31536000, immutable',
     // 브라우저는 <video> 를 재생·탐색할 때 Range 요청을 쓴다. 이 헤더가 없으면 영상이
     // 아예 재생되지 않거나 중간으로 건너뛸 수 없다.
     'Accept-Ranges': 'bytes',
   };
+
+  // ?download=<파일명> — Supabase Storage 와 같은 규약. 저장된 이름은 UUID 라
+  // 그대로 받으면 어느 업체 사진인지 알 수 없어서, 받을 때 이름을 붙여준다.
+  const wanted = new URL(request.url).searchParams.get('download');
+  if (wanted !== null) {
+    const name = wanted.trim() || path.basename(filePath);
+    // 한글 파일명은 헤더에 그대로 못 넣는다. filename* (RFC 5987) 만 보내면 이를 읽지 못하는
+    // 브라우저가 "download" 라는 이름으로 저장하므로, 인코딩된 filename= 도 함께 보낸다
+    // (Supabase Storage 도 같은 방식으로 내려준다).
+    // filename= 에는 ASCII 만 넣을 수 있다(따옴표·역슬래시도 escape). 한글 이름은
+    // filename* (RFC 5987) 로 전달하고, filename= 에는 알아볼 수 있는 대체 이름을 둔다.
+    // 비ASCII 를 걷어내면 "- 2.jpg" 같은 알아볼 수 없는 이름이 남을 수 있어, 글자가
+    // 거의 안 남으면 차라리 무난한 기본 이름을 쓴다
+    const stripped = name.replace(/[^\x20-\x7E]/g, '').replace(/["\\]/g, '').replace(/\s+/g, ' ').trim();
+    const ascii = /[A-Za-z0-9]{2,}/.test(stripped) ? stripped : `photo${path.extname(filePath) || '.jpg'}`;
+    baseHeaders['Content-Disposition'] =
+      `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+  }
 
   const range = request.headers.get('range');
   if (range) {

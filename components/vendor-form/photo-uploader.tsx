@@ -422,14 +422,21 @@ function Dropzone({ multiple, onUploaded, children, className, ariaLabel, compac
 interface MainPhotoFieldProps {
   value: string | null;
   onChange: (url: string | null) => void;
+  downloadName?: string;
 }
 
-export function MainPhotoField({ value, onChange }: MainPhotoFieldProps) {
+export function MainPhotoField({ value, onChange, downloadName }: MainPhotoFieldProps) {
   return (
     <div className="flex items-start gap-4">
       {value ? (
         <div className="relative">
-          <PhotoThumb url={value} alt="대표사진" sizes="160px" className="h-40 w-40 rounded-lg border" />
+          <PhotoThumb
+            url={value}
+            alt="대표사진"
+            sizes="160px"
+            className="h-40 w-40 rounded-lg border"
+            downloadName={downloadName}
+          />
           <Button
             type="button"
             variant="destructive"
@@ -491,13 +498,15 @@ export function ProductPhotosField({ photos, onUpdate }: ProductPhotosFieldProps
 // ---- 다중 사진 리스트 (갤러리 / 드레스) ----
 interface PhotoListFieldProps {
   photos: PhotoRow[];
+  /** 원본을 받을 때 붙일 이름의 앞부분 (예: '더그레이스 웨딩홀-갤러리') */
+  downloadPrefix?: string;
   /** 항상 최신 상태(prev) 기준으로 갱신 — 업로드가 느릴 때 낡은 배열로 덮어쓰는 것을 방지 */
   onUpdate: (updater: (prev: PhotoRow[]) => PhotoRow[]) => void;
   withLabel?: boolean; // 드레스: 장별 라벨(드레스명/라인) 입력
   labelPlaceholder?: string;
 }
 
-export function PhotoListField({ photos, onUpdate, withLabel, labelPlaceholder }: PhotoListFieldProps) {
+export function PhotoListField({ photos, onUpdate, withLabel, labelPlaceholder, downloadPrefix }: PhotoListFieldProps) {
   function move(index: number, delta: number) {
     onUpdate((prev) => {
       const target = index + delta;
@@ -523,6 +532,7 @@ export function PhotoListField({ photos, onUpdate, withLabel, labelPlaceholder }
                 alt={photo.label || `사진 ${i + 1}`}
                 sizes="64px"
                 className="h-16 w-16 shrink-0 rounded-md border"
+                downloadName={`${downloadPrefix ?? '사진'} ${i + 1}${photo.label.trim() ? ` ${photo.label.trim()}` : ''}`}
               />
               <div className="min-w-0 flex-1">
                 {withLabel ? (

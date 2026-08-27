@@ -28,6 +28,7 @@ import {
   useWarnBeforeUnload,
 } from './photo-uploader';
 import { VideoLinkField } from './video-link-field';
+import { DownloadAllPhotos } from './download-all-photos';
 import { BrandLoaderOverlay } from '@/components/brand-loader';
 import { deleteContract } from '@/app/contracts/actions';
 
@@ -237,11 +238,17 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
         </TabsContent>
 
         <TabsContent value="photos" className="card-surface space-y-6 p-4 sm:p-6">
+          <DownloadAllPhotos state={state} />
+
           <div className="space-y-1.5">
             <Label className="text-sm font-medium">
               대표사진 <span className="text-destructive">*</span>
             </Label>
-            <MainPhotoField value={state.mainPhoto} onChange={(mainPhoto) => patch({ mainPhoto })} />
+            <MainPhotoField
+              value={state.mainPhoto}
+              onChange={(mainPhoto) => patch({ mainPhoto })}
+              downloadName={`${state.name.trim() || '업체'}-대표사진`}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -250,6 +257,7 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
             <PhotoListField
               photos={state.galleryPhotos}
               onUpdate={(updater) => setState((prev) => ({ ...prev, galleryPhotos: updater(prev.galleryPhotos) }))}
+              downloadPrefix={`${state.name.trim() || '업체'}-갤러리`}
             />
           </div>
 
@@ -264,6 +272,7 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
                 onUpdate={(updater) => setState((prev) => ({ ...prev, dressPhotos: updater(prev.dressPhotos) }))}
                 withLabel
                 labelPlaceholder="드레스명 / 라인 (예: 머메이드 라인)"
+                downloadPrefix={`${state.name.trim() || '업체'}-드레스`}
               />
             </div>
           )}

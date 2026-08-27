@@ -11,6 +11,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { downloadFile } from '@/lib/download';
 
 interface PhotoThumbProps {
   url: string;
@@ -18,10 +19,12 @@ interface PhotoThumbProps {
   /** 타일의 CSS 크기 — next/image 에 어느 정도 크기가 필요한지 알려준다 */
   sizes: string;
   className?: string;
+  /** 원본을 받을 때 붙일 파일 이름 (확장자 제외). 없으면 alt 를 쓴다 */
+  downloadName?: string;
 }
 
 /** 눌러서 크게 볼 수 있는 썸네일 */
-export function PhotoThumb({ url, alt, sizes, className }: PhotoThumbProps) {
+export function PhotoThumb({ url, alt, sizes, className, downloadName }: PhotoThumbProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,7 +43,9 @@ export function PhotoThumb({ url, alt, sizes, className }: PhotoThumbProps) {
           <span className="text-xs font-medium">크게 보기</span>
         </span>
       </button>
-      {open && <PhotoViewer url={url} alt={alt} onClose={() => setOpen(false)} />}
+      {open && (
+        <PhotoViewer url={url} alt={alt} downloadName={downloadName ?? alt} onClose={() => setOpen(false)} />
+      )}
     </>
   );
 }
@@ -48,10 +53,13 @@ export function PhotoThumb({ url, alt, sizes, className }: PhotoThumbProps) {
 interface PhotoViewerProps {
   url: string;
   alt: string;
+  downloadName: string;
   onClose: () => void;
 }
 
-function PhotoViewer({ url, alt, onClose }: PhotoViewerProps) {
+function PhotoViewer({ url, alt, downloadName, onClose }: PhotoViewerProps) {
+  const [saving, setSaving] = useState(false);
+
   // 크게보기가 떠 있는 동안 뒤 배경이 스크롤되면 위치를 잃는다
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -77,6 +85,18 @@ function PhotoViewer({ url, alt, onClose }: PhotoViewerProps) {
       <div className="flex shrink-0 items-center justify-between gap-2 pb-3">
         <span className="min-w-0 truncate text-sm text-white/80">{alt}</span>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSaving(true);
+              downloadFile(url, downloadName).finally(() => setSaving(false));
+            }}
+            disabled={saving}
+            className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-white/90 disabled:opacity-60"
+          >
+            {saving ? '내려받는 중...' : '원본 다운로드'}
+          </button>
           <a
             href={url}
             target="_blank"
@@ -84,7 +104,7 @@ function PhotoViewer({ url, alt, onClose }: PhotoViewerProps) {
             onClick={(e) => e.stopPropagation()}
             className="rounded-md border border-white/30 px-3 py-1.5 text-xs text-white hover:bg-white/10"
           >
-            원본 파일 열기
+            새 탭에서 열기
           </a>
           <button
             type="button"
@@ -110,7 +130,7 @@ function PhotoViewer({ url, alt, onClose }: PhotoViewerProps) {
       </div>
 
       <p className="shrink-0 pt-3 text-center text-xs text-white/50">
-        화면을 누르거나 Esc 로 닫습니다. [원본 파일 열기] 는 줄이지 않은 원본을 새 탭에서 엽니다.
+        화면을 누르거나 Esc 로 닫습니다. [원본 다운로드] 는 올릴 때 그대로인 원본 파일을 저장합니다.
       </p>
     </div>
   );
