@@ -1,144 +1,151 @@
-# Vercel 계정 이전 체크리스트 (개인 → 회사)
+# Vercel만 회사 계정으로 옮기기
 
-지금 sdnig 는 개인 Hobby 계정(`taehyeungs-projects`)에 올라가 있고, 비용도 개인이 부담하고 있다.
-이걸 회사 Vercel 팀으로 통째로 옮기는 절차다.
+GitHub 저장소와 Supabase 프로젝트는 **건드리지 않는다.** 코드도 DB도 사진도 그대로 둔다.
+Vercel 프로젝트만 회사 계정에서 새로 만들고, 개인 계정 것을 버린다.
 
-- 프로젝트: `sdnig` / `prj_nyia86ZnmOFw2x4XFdXrhhOhLefj`
-- 현재 소속: `team_NwvApEkfBQULVxjN4dU7Tue0` (개인 Hobby)
-- 도메인: `sdnig.vercel.app` (커스텀 도메인 없음)
-- 배포 방식: Git 연결 없음, CLI(`vercel --prod`) 로만 배포
-- 환경변수: 7개 (전부 production)
+Vercel 의 "프로젝트 이전(Transfer)" 기능은 쓰지 않는다. 그 기능은 양쪽 팀에 모두 소속돼야 하는데
+회사 계정은 별도 로그인이고, 무료로는 팀을 만들 수 없어서 경로가 막힌다.
+대신 **새로 만들어서 갈아끼운다.** Vercel 이 실제로 들고 있는 건 환경변수 7개와 프로젝트 이름뿐이다.
 
-> 참고: Vercel Hobby 플랜은 약관상 **비상업·개인 용도 전용**이다.
-> 회사 업무용 어드민은 Pro 이상이 필요하므로, 이 이전은 비용 문제이기도 하지만 약관상으로도 맞는 방향이다.
+## 사전 확인 (완료)
+
+| 항목 | 확인 결과 |
+|---|---|
+| 배포된 코드 | 커밋 `1b55d02` = GitHub `origin/main` — 드리프트 없음 |
+| 저장소 | `rnjsxogud0614-collab/sdnig`, **public** → 어느 Vercel 계정이든 import 가능 |
+| 도메인 | `sdnig.vercel.app` 하나. 커스텀 도메인 없음 |
+| 환경변수 | 7개, 전부 production |
+| Vercel Integration | 없음 (Supabase 는 환경변수로 직접 연결) |
 
 ---
 
-## 0. 시작 전 — 값 확보 (제일 중요)
+## 환경변수 7개 — 어디서 가져오는가
 
-이전하면 환경변수는 **복사되어 따라온다**(Vercel 공식 문서 기준, 예외는 `vercel.json` 의 `env`/`build.env` 뿐인데
-이 프로젝트 `vercel.json` 에는 `regions` 만 있으므로 해당 없음).
+| 변수 | 조달 방법 |
+|---|---|
+| `ADMIN_PASSWORD` | `1111` |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://jypyhiylzwhdkzicfrbi.supabase.co` |
+| `SUPABASE_STORAGE_BUCKET` | `vendor-photos` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → `service_role` 복사 |
+| `MAINTENANCE_TOKEN` | 개인 Vercel 화면에서 값이 그대로 보인다(sensitive 아님). **아무 랜덤 문자열로 새로 만들어도 무방** — 고아 파일 정리 API 를 막는 용도뿐이라 기존 값과 같을 필요가 없다 |
+| `DATABASE_URL` | DB 비밀번호 필요 → **1단계** |
+| `DIRECT_URL` | DB 비밀번호 필요 → **1단계** |
 
-그래도 7개 중 6개가 `sensitive` 타입이라 **화면에서도 CLI 로도 값을 다시 볼 수 없다.**
-만에 하나 안 넘어갔을 때를 대비해, 각 값의 출처를 정리해두면 전부 복구 가능하다.
+---
 
-| 환경변수 | 타입 | 복구 방법 |
-|---|---|---|
-| `ADMIN_PASSWORD` | sensitive | 알고 있음 → `1111` |
-| `NEXT_PUBLIC_SUPABASE_URL` | sensitive | `https://jypyhiylzwhdkzicfrbi.supabase.co` |
-| `SUPABASE_STORAGE_BUCKET` | sensitive | `vendor-photos` |
-| `SUPABASE_SERVICE_ROLE_KEY` | sensitive | Supabase → Settings → API → `service_role` 다시 복사 |
-| `MAINTENANCE_TOKEN` | encrypted | Vercel 화면에서 값이 그대로 보임 (sensitive 아님) |
-| `DATABASE_URL` | sensitive | **DB 비밀번호를 모름** → 아래 참고 |
-| `DIRECT_URL` | sensitive | **DB 비밀번호를 모름** → 아래 참고 |
+## 1단계 — DB 비밀번호 재설정 (단독으로, 다른 날에)
 
-### DB 비밀번호 (유일하게 손에 없는 값)
+**왜 필요한가:** `DATABASE_URL`/`DIRECT_URL` 안에 든 DB 비밀번호를 아무도 모른다.
+Vercel 에 sensitive 로 저장돼 있어 되읽을 수 없다. 새 프로젝트에 넣을 값이 없으므로 재설정이 유일한 방법이다.
 
-Supabase DB 비밀번호는 저장해둔 게 없다. 다만 **재설정하면 되므로 영구 손실은 아니다.**
-Supabase → Settings → Database → *Reset database password* 로 새로 발급받고, 아래 형식으로 다시 만들면 된다.
+**이 단계가 이 계획에서 유일하게 사이트가 죽는 구간이다.** 재설정하는 순간 현재 배포의 DB 연결이 끊긴다.
+복구까지 5~10분 걸리므로(빌드에 마이그레이션이 포함됨) 문의가 없는 시간대에 한다.
+**2·3단계와 절대 같은 날에 하지 않는다.** 문제가 생겼을 때 원인을 구분할 수 없게 된다.
+
+1. Supabase → Settings → Database → **Reset database password** → 새 비밀번호를 안전한 곳에 저장
+2. 같은 화면의 **Connection string 을 통째로 복사**한다. `.env.example` 을 보고 손으로 조립하지 말 것 —
+   풀러 호스트명(`aws-0`/`aws-1`, 리전 표기)은 프로젝트마다 다르고 시간이 지나며 바뀐다.
+   - **Transaction pooler (포트 6543)** → `DATABASE_URL`. 끝에 `?pgbouncer=true` 가 붙어야 한다
+   - **Direct / Session (포트 5432)** → `DIRECT_URL`
+   - 둘을 바꿔 넣으면 마이그레이션이 실패한다
+3. 개인 Vercel → sdnig → Settings → Environment Variables → 두 값을 갱신
+4. Deployments → 최신 배포 → **Redeploy**
+5. 사이트 확인: 로그인 → 업체 목록 → 사진 표시
+
+여기서 멈춘다. 정상으로 돌아온 걸 확인하고 하루 넘긴다.
+
+---
+
+## 2단계 — 회사 계정에 새 프로젝트 만들기 (무중단)
+
+이 단계 내내 기존 `sdnig.vercel.app` 은 그대로 살아 있다. 새 것이 확실히 되는 걸 본 뒤에 갈아끼운다.
+
+1. 회사 계정으로 Vercel 로그인 → **Add New → Project**
+2. 저장소 연결 — **아래 배포 방식 참고**
+3. 프로젝트 이름은 일단 `sdnig-admin` 같은 **임시 이름**으로 둔다 (3단계에서 바꾼다)
+4. 환경변수 7개를 **Production** 대상으로 입력
+5. Deploy
+
+### 배포 방식 두 가지
+
+**A. GitHub 연결 (편하다)** — push 만으로 배포된다. 다만 Hobby 플랜에는 제약이 있다:
+- Hobby 팀 프로젝트는 **GitHub 조직(Organization) 소유 저장소에 연결할 수 없다.**
+  지금 저장소는 개인 계정 소유라 해당되지 않지만, 나중에 GitHub 를 회사 org 로 옮기면 그때 막힌다
+- Hobby 는 private 저장소 협업을 지원하지 않는다. 지금은 public 이라 괜찮지만, private 으로 바꾸면 문제가 된다
+- 커밋 작성자와 팀 소유자가 다르면 배포가 거부될 수 있다
+
+**B. CLI 배포 (확실하다)** — 지금까지 써온 방식 그대로다. Git 연결 제약을 전부 우회한다.
+```bash
+npx vercel login          # 회사 계정으로 로그인
+npx vercel link           # 새 프로젝트에 연결
+npx vercel --prod
+```
+A 가 막히면 B 로 간다. B 는 지금 동작이 증명된 경로다.
+
+### 검증 — 이게 이 계획에서 제일 중요하다
+
+**"사이트가 뜨니까 됐다"는 통하지 않는다.** 코드에 폴백 기본값이 실제 운영값과 같게 박혀 있어서,
+환경변수 2개가 통째로 없어도 사이트가 완전히 정상으로 보인다.
 
 ```
-DATABASE_URL = postgresql://postgres.jypyhiylzwhdkzicfrbi:<새비번>@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true
-DIRECT_URL   = postgresql://postgres.jypyhiylzwhdkzicfrbi:<새비번>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres
+lib/auth.ts:10      process.env.ADMIN_PASSWORD || '1111'
+lib/storage.ts:8    process.env.SUPABASE_STORAGE_BUCKET || 'vendor-photos'
 ```
 
-**권장(보험):** 이전을 시작하기 *전에* 비밀번호를 미리 재설정하고, 그 값으로 현재 프로젝트의
-`DATABASE_URL`/`DIRECT_URL` 을 갱신 → 재배포 → 사이트 정상 확인까지 해둔다.
-그러면 이전 결과가 어떻든 모든 값을 손에 쥔 상태가 된다.
-(비밀번호를 바꾸는 순간 기존 연결이 끊기므로, 반드시 Vercel 환경변수 갱신 + 재배포를 같이 해야 한다.)
+그래서 다음 세 가지를 각각 확인한다.
+
+1. **키 이름 세기** — Settings → Environment Variables 에서 7개가 실제로 목록에 있는지 눈으로 센다.
+   특히 `ADMIN_PASSWORD` 와 `SUPABASE_STORAGE_BUCKET` 은 기능 테스트로 절대 잡히지 않으니 이름을 개별 확인한다
+2. **사진이 실제로 렌더되는지** — 임시 주소 접속 → 업체 상세 → F12 → Network 탭에서
+   `/_next/image?...` 요청이 **200** 인지 본다. **400 이면** 원인은 DB 도 Storage 도 아니고
+   빌드 시점의 `NEXT_PUBLIC_SUPABASE_URL` 이다 (`next.config.ts:11` 이 값이 없으면 조용히 빈 배열을 반환해서
+   빌드는 성공하고 사진만 전부 깨진다)
+3. **업로드 한 장** — 사진 1장 올려보고 지운다. `SUPABASE_SERVICE_ROLE_KEY` 는 이걸로만 검증된다
 
 ---
 
-## A. 회사 계정 쪽에서 먼저 할 일 (여기가 안 되면 이전 자체를 시작할 수 없음)
+## 3단계 — 주소 갈아끼우기 (선택)
 
-Vercel 이전은 **한 사람이 보내는 쪽과 받는 쪽 양쪽에 모두 소속돼 있어야** 실행된다.
-개인 계정 → 다른 사람의 개인 계정으로는 못 옮긴다. 반드시 회사 **팀(Team)** 이 있어야 한다.
+새 주소를 그냥 쓸 거면 이 단계는 건너뛴다. `sdnig.vercel.app` 을 지키고 싶을 때만 한다.
 
-1. **회사 Vercel 팀 생성** — 회사 이메일 계정으로 로그인 → Create Team
-2. **Pro 플랜 전환** — 협업(멤버 초대)은 Pro 이상 전용. 계정당 1회 **14일 무료 트라이얼**이 있으니 먼저 써봐도 된다.
-3. **결제수단 등록** — 유효한 결제수단이 없으면 이전 후 서비스가 중단될 수 있다고 Vercel 문서가 명시한다. **이전 전에 반드시 등록.**
-4. **나를 팀 멤버로 초대** — Settings → Members → Invite (`rnjsxogud2165@gmail.com`, 지금 Vercel 로그인 계정)
-   - 역할은 **Member 이상**이면 충분 (Owner 아니어도 됨)
-   - 초대 메일 수락까지 완료
-5. **회사 팀에 `sdnig` 라는 이름의 프로젝트가 없는지 확인**
-   - 있으면 이전할 때 이름을 반드시 바꿔야 하고, 그러면 **`sdnig.vercel.app` 주소가 달라진다.**
-   - 없으면 이름 그대로 유지되고 주소도 그대로다.
-6. (선택) 세금계산서가 필요하면 Settings → Billing 에 회사 사업자 정보 입력
+`.vercel.app` 주소는 프로젝트 이름에서 나오고 **전역 선착순**이라, 같은 이름을 두 프로젝트가 동시에 가질 수 없다.
+그래서 옛것에서 이름을 뗀 뒤 새것에 붙인다. **두 작업을 연달아, 쉬지 않고 한다.**
+
+1. 개인 Vercel → sdnig → Settings → General → Project Name 을 `sdnig-old` 로 변경
+2. **즉시** 회사 Vercel → 새 프로젝트 → Project Name 을 `sdnig` 로 변경
+3. `https://sdnig.vercel.app` 접속 확인
+4. 2번이 "이름을 쓸 수 없다"고 거부하면 1번을 되돌리고(다시 `sdnig`) 잠시 뒤 재시도한다
+
+이름을 뗀 직후 잠깐 무주공산이 되므로 이 사이가 짧을수록 좋다. 두 브라우저 탭을 미리 각각 열어두고 진행한다.
 
 ---
 
-## B. 내 계정(개인) 쪽에서 할 일
+## 4단계 — 정리
 
-1. `0단계` 의 값 확보 / DB 비밀번호 보험 조치 완료
-2. **회사 팀 초대 수락** (A-4)
-3. 배포 중이면 끝날 때까지 대기 — 이전 중에는 새 배포를 만들 수 없다
-4. 현재 사이트가 정상인지 확인해 기준점을 잡아둔다
-   - `https://sdnig.vercel.app` 로그인 → 업체 목록 / 계약 목록 / 사진 표시
-   - 업체 수, 사진 몇 장 정도는 눈으로 기억해둔다 (이전 후 비교용)
-
----
-
-## C. 이전 실행 (개인 계정에서, 10초 ~ 10분)
-
-1. Vercel 대시보드 → 개인 계정(`taehyeungs-projects`) → **sdnig** 프로젝트
-2. **Settings → General → 페이지 맨 아래 "Transfer Project"**
-3. 받는 팀으로 **회사 팀** 선택
-4. 마법사 마지막 확인 화면에서 **넘어갈 도메인·환경변수 목록이 나온다. 여기서 반드시 확인:**
-   - `sdnig.vercel.app` 이 목록에 있는가
-   - 환경변수가 **7개 전부** 있는가 (`DATABASE_URL`, `DIRECT_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
-     `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`, `ADMIN_PASSWORD`, `MAINTENANCE_TOKEN`)
-   - 프로젝트 이름을 바꾸라고 요구하면 → 회사 팀에 같은 이름이 이미 있는 것. **일단 취소**하고 A-5 를 정리한 뒤 다시 시작한다.
-5. Transfer 실행 — 별도 수락 단계 없이 바로 진행되고, 끝나면 회사 팀의 프로젝트 화면으로 넘어간다
-
-**이전 중에는:** 서비스는 계속 뜬다(무중단). 다만 새 배포 / 설정 변경 / 프로젝트 삭제가 안 된다.
+1. 며칠 지켜본 뒤 개인 계정의 `sdnig-old` 프로젝트 삭제
+2. 로컬 작업 디렉터리 재연결
+   ```bash
+   rm -rf .vercel && npx vercel link
+   ```
+   `.vercel/project.json` 의 `orgId` 가 개인 팀을 가리키고 있어서 그대로 두면 옛 프로젝트로 배포된다
+3. 개인 계정에서 발급한 배포 토큰이 있으면 폐기
 
 ---
 
-## D. 이전 직후 확인 (회사 계정에서)
+## 알아둘 것
 
-1. **사이트 동작 확인** — `https://sdnig.vercel.app` 접속 → `1111` 로 로그인
-   - 업체 목록이 뜨는가 (DB 연결 = `DATABASE_URL` 정상)
-   - 사진이 보이는가 (Storage = `NEXT_PUBLIC_SUPABASE_URL`, 버킷 정상)
-   - 업체 하나 열어서 사진 업로드가 되는가 (`SUPABASE_SERVICE_ROLE_KEY` 정상)
-   - 여기까지 되면 환경변수가 제대로 넘어온 것이다
-2. **환경변수 7개 확인** — Settings → Environment Variables 에 7개가 다 있는지
-   - 빠진 게 있으면 `0단계` 표를 보고 다시 넣고 재배포
-3. **재배포 한 번** — 이전 자체는 배포를 다시 하지 않으므로, 새 팀에서 배포가 정상인지 한 번 돌려본다
+**빌드가 운영 DB 를 건드린다.** `package.json` 의 `"build": "prisma migrate deploy && next build"` 라서,
+새 프로젝트의 첫 빌드도 `next build` 전에 같은 Supabase DB 에 마이그레이션을 적용한다.
+지금 마이그레이션 5개는 모두 적용이 끝나 있어 실제로는 아무것도 하지 않고 지나간다(no-op).
+다만 "새 Vercel 프로젝트니까 DB 와 무관하다"는 생각은 틀렸다 — 새것도 옛것도 **같은 DB 하나**를 본다.
+그래서 2단계 동안 두 프로젝트가 동시에 같은 DB 를 바라보는 상태가 되는데, 읽기·쓰기 모두 정상 동작한다.
 
----
+**되돌리기.** 3단계 전까지는 모두 되돌릴 수 있다 — 기존 사이트를 그대로 두고 새것만 만드는 것이기 때문이다.
+되돌릴 수 없는 유일한 것은 1단계의 DB 비밀번호 재설정인데, 이것도 다시 재설정하면 된다.
 
-## E. 이전 후 정리 (배포 경로 복구)
+**Hobby 플랜 제약은 그대로다.** 회사 계정도 Hobby 이므로 비상업적·개인 용도 제한은 지금과 동일하게 적용된다.
+바뀌는 것은 계정 주체이지 플랜이 아니다.
 
-이전하면 프로젝트의 소속 팀이 바뀌므로 **지금 쓰던 CLI 배포 경로가 끊긴다.**
-
-- 로컬 `.vercel/project.json` 의 `orgId` 가 옛날 값이 된다 → `vercel link` 로 다시 연결
-- 지금 쓰는 배포 토큰은 개인 팀 스코프라 회사 팀에서는 동작하지 않는다 → 회사 팀에서 새로 발급
-
-**근본 해결책 — GitHub 연결을 권장한다.**
-지금은 Git 연결 없이 CLI 로만 배포하는 구조라, 계정이 바뀔 때마다 토큰·링크를 다시 맞춰야 한다.
-회사 팀에서 이 저장소를 연결해두면 push 만으로 배포되고, 토큰 관리가 아예 필요 없어진다.
-Settings → Git → Connect Git Repository.
-
----
-
-## F. 알아둘 것
-
-**따라오는 것:** 환경변수, 도메인·별칭, 배포 이력, 빌드, 프로젝트 설정, Function Region(`icn1`), 보안 설정, Cron
-
-**안 따라오는 것:** 사용량 통계(0으로 리셋), 런타임·빌드 로그, 모니터링 데이터, Integrations
-→ sdnig 는 Integration 을 쓰지 않고 로그도 안 보므로 실질적인 손실 없음
-
-**Supabase 는 이번 이전과 무관하다.** DB·사진은 Supabase 계정에 그대로 있고 Vercel 은 환경변수로만 연결된다.
-Supabase 도 회사 계정으로 옮기려면 별도 작업이다.
-
-**되돌리기:** 전용 취소 버튼은 없지만, 반대 방향으로 다시 이전하면 원위치시킬 수 있다.
-
-### 비용 (Hobby $0 → Pro)
-
-- 고정비 **$20/월** — 배포 가능 좌석 1개 + 사용량 크레딧 $20 포함
-- 좌석 추가 시 1명당 $20/월. 단 **읽기 전용(Viewer) 좌석은 무료** — 화면만 보는 동료는 무료로 넣으면 된다
-- Hobby 의 무료 한도(Active CPU 4시간, 메모리 360 GB-hrs, 이미지 변환 5,000회)는 **사라지고**, 첫 단위부터 $20 크레딧에서 차감된다.
-  이 규모면 크레딧 안에서 끝날 가능성이 높지만, **첫 달 Usage 탭에서 실측을 꼭 확인할 것**
-- 서울 리전(`icn1`) 유지는 문제없다. Hobby 는 단일 리전, Pro 는 5개까지라 제약이 오히려 완화된다.
-  최저가 리전 대비 컴퓨트가 약 32% 비싸지만 이 규모에서는 월 $1~2 수준이고, Supabase 가 서울이라 지연 이득이 더 크다
-- 전환 후 **Settings → Spend Management 로 지출 상한 알림**을 걸어둘 것 (기본값 $200 은 이 규모에 너무 높다)
+**GitHub·Supabase 는 여전히 개인 소유다.** 이번 작업은 Vercel 만 옮긴다.
+나중에 GitHub 를 회사 조직으로 옮기면 Hobby 의 "조직 저장소 연결 불가" 제약에 걸리므로,
+그때는 CLI 배포로 가거나 Pro 를 검토해야 한다.
