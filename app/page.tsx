@@ -4,7 +4,7 @@
 // 등록된 업체는 목표 수치 유무와 무관하게 항상 해당 그룹·지역 집계에 반영된다.
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin-header';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { TARGET_GROUPS, type TargetGroup } from '@/lib/dashboard-targets';
 import { SIDO_LIST, splitRegion } from '@/lib/regions';
 import { prisma } from '@/lib/prisma';
@@ -102,9 +102,11 @@ export default async function DashboardPage() {
       <main className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-5 flex items-center justify-between">
           <h1 className="text-xl font-bold tracking-tight">수집 현황 대시보드</h1>
-          <Button render={<Link href="/vendors" />} variant="outline" size="sm">
+          {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.
+              Button render={<Link/>} 는 Base UI 가 비-button 요소라고 경고한다. */}
+          <Link href="/vendors" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             업체 리스트 보기
-          </Button>
+          </Link>
         </div>
 
         {/* 통합 진행률 */}

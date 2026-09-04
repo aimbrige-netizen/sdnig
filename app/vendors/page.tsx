@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin-header';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { VendorListControls, type VendorSort, type VendorView } from '@/components/vendor-list-controls';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CATEGORIES, categoryLabel, type VendorPhoto } from '@/lib/constants';
@@ -119,7 +119,11 @@ export default async function VendorsPage({
           <h1 className="text-xl font-bold tracking-tight">
             업체 리스트 <span className="ml-1 text-sm font-normal text-muted-foreground">{vendors.length}개</span>
           </h1>
-          <Button render={<Link href="/vendors/new" />}>새 업체 등록</Button>
+          {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.
+              Button render={<Link/>} 는 Base UI 가 비-button 요소라고 경고한다. */}
+          <Link href="/vendors/new" className={buttonVariants()}>
+            새 업체 등록
+          </Link>
         </div>
 
         {/* 업종 필터 (기획서 요구: 업종별로 나눠서 보기 편하게) */}
@@ -158,9 +162,9 @@ export default async function VendorsPage({
           <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-20 text-center text-muted-foreground">
             {filterDesc ? `${filterDesc} 조건에 등록된 업체가 없습니다.` : '등록된 업체가 없습니다.'}
             <div className="mt-3">
-              <Button render={<Link href="/vendors/new" />} variant="outline" size="sm">
+              <Link href="/vendors/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
                 새 업체 등록하기
-              </Button>
+              </Link>
             </div>
           </div>
         ) : view === 'list' ? (

@@ -204,6 +204,6 @@ lib/
   regions.ts            # 시/도-구/군 지역 데이터
   storage.ts            # Supabase Storage 서명 업로드 URL 발급 / 파일 삭제 / 로컬 폴백
 prisma/
-  schema.prisma         # vendors, contracted_vendors
+  schema.prisma         # vendors, contracted_vendors, contract_memos
 proxy.ts                # 비밀번호 쿠키 체크 (구 middleware)
 ```

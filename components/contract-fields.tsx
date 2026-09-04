@@ -4,7 +4,6 @@
 import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/vendor-form/native-select';
 import { CONTRACT_TYPES, type ContractType } from '@/lib/contract-constants';
 import { cn } from '@/lib/utils';
@@ -15,11 +14,10 @@ export interface ContractFormState {
   phone: string;
   address: string;
   managerName: string;
-  memo: string;
 }
 
 export function emptyContractForm(): ContractFormState {
-  return { name: '', contractType: 'verbal', phone: '', address: '', managerName: '', memo: '' };
+  return { name: '', contractType: 'verbal', phone: '', address: '', managerName: '' };
 }
 
 export function serializeContract(state: ContractFormState) {
@@ -29,7 +27,6 @@ export function serializeContract(state: ContractFormState) {
     phone: state.phone,
     address: state.address,
     managerName: state.managerName,
-    memo: state.memo,
   };
 }
 
@@ -40,7 +37,6 @@ export const CONTRACT_FIELD_LABELS: Record<string, string> = {
   phone: '전화번호',
   address: '주소',
   managerName: 'DB담당자',
-  memo: '메모',
 };
 
 // htmlFor/id 로 라벨과 입력을 반드시 연결한다. 연결이 없으면 스크린리더가 칸 이름을 못 읽고,
@@ -75,10 +71,14 @@ interface ContractFieldsProps {
   nameRef?: React.Ref<HTMLInputElement>;
   /** 저장 중 입력 잠금 — 응답이 도착하면 폼을 비우므로, 그 사이 입력한 내용이 사라지는 것을 막습니다 */
   disabled?: boolean;
+  /** 좁은 세로 패널(상세 페이지 사이드바)용 — 한 줄에 한 필드씩, 업체명도 다른 칸과 같은 폭으로 둔다.
+      단순히 그리드 컬럼 수만 줄이면 업체명의 col-span-2 가 가상의 2번째 열을 만들어 나머지
+      필드가 그 열을 나눠 쓰며 찌그러진다 — 그래서 컬럼 수와 업체명의 span 을 함께 끈다. */
+  narrow?: boolean;
   className?: string;
 }
 
-export function ContractFields({ state, patch, onEnter, nameRef, disabled, className }: ContractFieldsProps) {
+export function ContractFields({ state, patch, onEnter, nameRef, disabled, narrow, className }: ContractFieldsProps) {
   // 이 컴포넌트는 빠른등록 폼과 수정 다이얼로그에서 동시에 렌더될 수 있으므로 id 가 겹치면 안 된다
   const uid = useId();
   const id = (field: string) => `${uid}-${field}`;
@@ -93,8 +93,14 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
     : undefined;
 
   return (
-    <div className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6', className)}>
-      <div className="space-y-1 lg:col-span-2">
+    <div
+      className={cn(
+        'grid grid-cols-1 gap-3',
+        narrow ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-6',
+        className
+      )}
+    >
+      <div className={cn('space-y-1', !narrow && 'lg:col-span-2')}>
         <FieldLabel htmlFor={id('name')} required>
           업체명
         </FieldLabel>
@@ -162,21 +168,6 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, class
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder="예: 홍길동"
-        />
-      </div>
-
-      {/* 메모는 길어질 수 있어 한 줄을 통째로 쓴다.
-          Enter 로 저장하지 않고 줄바꿈이 되도록 onKeyDown 을 붙이지 않는다. */}
-      <div className="space-y-1 col-span-full">
-        <FieldLabel htmlFor={id('memo')}>메모</FieldLabel>
-        <Textarea
-          id={id('memo')}
-          rows={2}
-          value={state.memo}
-          onChange={(e) => patch({ memo: e.target.value })}
-          disabled={disabled}
-          placeholder="구두 계약 조건, 진행 상황 등 자유롭게 (선택)"
-          className="min-h-16"
         />
       </div>
     </div>
