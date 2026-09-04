@@ -28,14 +28,17 @@ export function isInfoIncomplete(v: { phone: string | null; address: string | nu
   return !v.phone?.trim() || !v.address?.trim();
 }
 
-// 계약 진행 상태 — 메모를 남길 때마다 고르는 4단계.
+// 계약 진행 상태 — 메모를 남길 때마다 고르는 5단계.
 // 업체의 "현재 상태"는 별도 컬럼이 아니라 가장 최근 메모의 status 로 정합니다.
 //
-// 재컨텍요망 → 미팅예정 → 미팅완료 → 계약완료 순서가 있는 단계라, 서로 다른 색상(categorical)이
-// 아니라 단일 색상의 밝기 단계(ordinal 시퀀셜)로 표현합니다. 실제 색값은 app/globals.css 의
-// --data-status-* 토큰에 정의되어 있고, validate_palette.js --ordinal 로 검증했습니다.
+// 재컨텍요망 → 장기가망 → 미팅예정 → 미팅완료 → 계약완료 순서가 있는 단계라, 서로 다른
+// 색상(categorical)이 아니라 단일 색상의 밝기 단계(ordinal 시퀀셜)로 표현합니다. "장기가망"은
+// 연락은 닿았지만 전환까지 오래 걸릴 걸로 보이는 곳 — 재컨텍요망(연락 자체가 안 된 상태)보다는
+// 따뜻하고 미팅예정보다는 이릅니다. 실제 색값은 app/globals.css 의 --data-status-* 토큰에
+// 정의되어 있고, validate_palette.js --ordinal 로 검증했습니다.
 export const CONTRACT_STATUSES = [
   { code: 'recontact', label: '재컨텍요망', dotVar: 'var(--data-status-recontact)' },
+  { code: 'longterm', label: '장기가망', dotVar: 'var(--data-status-longterm)' },
   { code: 'scheduled', label: '미팅예정', dotVar: 'var(--data-status-scheduled)' },
   { code: 'consulted', label: '미팅완료', dotVar: 'var(--data-status-consulted)' },
   { code: 'contracted', label: '계약완료', dotVar: 'var(--data-status-contracted)' },

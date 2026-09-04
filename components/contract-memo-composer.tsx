@@ -1,6 +1,6 @@
 'use client';
 
-// 새 진행 메모 작성 — 상태 4개 중 하나를 고르고, 날짜를 고르고, 내용을 적어 남긴다.
+// 새 진행 메모 작성 — 상태 5개 중 하나를 고르고, 날짜를 고르고, 내용을 적어 남긴다.
 // 저장되면 타임라인 맨 위에 쌓인다(최신 메모가 위).
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
