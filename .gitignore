@@ -45,3 +45,6 @@ next-env.d.ts
 
 # 로컬 개발용 업로드 파일
 /.uploads/
+
+# claude code 개인 설정(권한 규칙 등)
+.claude/settings.local.json
