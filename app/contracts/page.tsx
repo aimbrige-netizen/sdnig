@@ -99,17 +99,21 @@ function StatTile({
   );
 }
 
-/** 진행 상태 배지 — 점 + 라벨. 미분류는 중립 회색으로 다른 뜻(위험/경고)처럼 보이지 않게 한다. */
-function StatusBadge({ status }: { status: string | null }) {
+/** 진행 상태 배지 — 점 + 라벨 + (있으면) 그 상태를 남긴 최근 메모 작성일.
+ *  미분류는 중립 회색으로 다른 뜻(위험/경고)처럼 보이지 않게 한다. */
+function StatusBadge({ status, lastMemoAt }: { status: string | null; lastMemoAt: Date | null }) {
   const label = status ? contractStatusLabel(status) : '미분류';
   const dot = status ? contractStatusDot(status) : 'var(--muted-foreground)';
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-neutral-700"
-      style={{ backgroundColor: 'var(--contracts-inset)' }}
-    >
-      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
-      {label}
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-neutral-700"
+        style={{ backgroundColor: 'var(--contracts-inset)' }}
+      >
+        <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
+        {label}
+      </span>
+      {lastMemoAt && <span className="text-xs text-neutral-400 tabular-nums">{formatDateKST(lastMemoAt)}</span>}
     </span>
   );
 }
@@ -406,6 +410,7 @@ export default async function ContractsPage({
                     {vendors.map((v, i) => {
                       const incomplete = isInfoIncomplete(v);
                       const latestStatus = v.memos[0]?.status ?? null;
+                      const lastMemoAt = v.memos[0]?.createdAt ?? null;
                       return (
                         <ContractRow
                           key={v.id}
@@ -469,7 +474,7 @@ export default async function ContractsPage({
                           </TableCell>
                           <TableCell className="text-muted-foreground">{v.managerName || '-'}</TableCell>
                           <TableCell>
-                            <StatusBadge status={latestStatus} />
+                            <StatusBadge status={latestStatus} lastMemoAt={lastMemoAt} />
                           </TableCell>
                           <TableCell className="text-right text-muted-foreground tabular-nums">
                             {formatDateTimeKST(v.createdAt)}
