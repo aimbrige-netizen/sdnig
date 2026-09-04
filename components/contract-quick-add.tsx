@@ -78,11 +78,9 @@ export function ContractQuickAdd() {
       // 담당자·계약형태는 유지 — 같은 담당자가 여러 곳을 연달아 입력하는 흐름이 대부분.
       // 저장 중에는 입력이 잠겨 있으므로(disabled) 여기서 비우는 값이 사용자가 그 사이
       // 입력한 내용을 덮어쓸 일은 없다.
-      // 메모는 업체마다 다른 내용이라 반드시 비운다 — 남겨두면 다음 업체에 엉뚱한 메모가 딸려 들어간다.
-      // (담당자·계약형태만 유지)
       setSavedName(payload.name);
       setJustSaved((prev) => [payload.name, ...prev]);
-      setState((prev) => ({ ...prev, name: '', phone: '', address: '', memo: '' }));
+      setState((prev) => ({ ...prev, name: '', phone: '', address: '' }));
       setRefocus((n) => n + 1);
     } catch {
       setErrors(['네트워크 오류로 저장하지 못했습니다. 다시 시도해주세요.']);

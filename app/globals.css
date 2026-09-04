@@ -89,6 +89,15 @@
      텍스트에는 절대 입히지 않고, 글자 옆의 점(mark)에만 사용합니다. */
   --data-contract-written: #2a78d6;
   --data-contract-verbal: #eb6834;
+  /* 계약 진행 단계(재컨텍요망→상담예정→상담완료→계약완료) — 순서가 있는 4단계라
+     dataviz 스킬의 ordinal 시퀀셜 램프(단일 색상, 밝음→어두움)로 표현합니다.
+     기본 시퀀셜 색상(blue)의 250/400/550/700 스텝. validate_palette.js --ordinal
+     흰 카드 표면 기준 전 항목 PASS(단조 밝기, 인접 ΔL ≥ 0.06, 밝은 끝 2.11:1).
+     기존 계약형태 슬롯(#2a78d6)과 겹치지 않도록 450 스텝은 건너뜁니다. */
+  --data-status-recontact: #86b6ef;
+  --data-status-scheduled: #3987e5;
+  --data-status-consulted: #1c5cab;
+  --data-status-contracted: #0d366b;
   /* 상태색(경고) — 아이콘+라벨과 항상 함께 쓰며 색 단독으로 의미를 나르지 않습니다.
      흰 배경에서 원색은 대비가 낮아, 칩은 옅은 배경 + 진한 잉크 조합으로 대비를 확보합니다. */
   --data-warning-tint: #fffbeb;

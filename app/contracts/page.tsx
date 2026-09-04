@@ -1,6 +1,10 @@
 // 계약 업체 DB — 구두/서면 계약만 맺고 상세 정보를 아직 못 받은 업체 명단.
-// 정식 입점 업체(/vendors)와 달리 업체명·전화번호·주소·DB담당자 + 메모만 받고,
+// 정식 입점 업체(/vendors)와 달리 업체명·전화번호·주소·DB담당자 + 진행 메모만 받고,
 // 계약서를 쓴 곳과 구두로만 한 곳을 구분해 관리합니다.
+//
+// 업체마다 진행 메모를 여러 번 남길 수 있고(상세 페이지 참고), 그중 가장 최근 메모의
+// 상태(재컨텍요망/상담예정/상담완료/계약완료)가 그 업체의 "현재 상태"입니다. 아직 메모를
+// 하나도 안 남긴 곳은 "미분류"로 둡니다.
 //
 // 요약부는 차트가 아니라 KPI 스탯 타일 + 미터입니다(dataviz: "몇 개의 헤드라인 숫자" → KPI row,
 // "한계 대비 비율 하나" → 미터). 색은 계약 형태를 가르는 점(mark)과 경고 상태에만 쓰고,
@@ -8,15 +12,23 @@
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import { AdminHeader } from '@/components/admin-header';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CONTRACTS_HEADING_ID } from '@/components/contract-detail-dialog';
 import { ContractRow } from '@/components/contract-row';
 import { ContractResultStatus } from '@/components/contract-result-status';
 import { ContractListControls } from '@/components/contract-list-controls';
 import { ContractQuickAdd } from '@/components/contract-quick-add';
-import { CONTRACT_TYPES, contractTypeDot, contractTypeLabel, isInfoIncomplete } from '@/lib/contract-constants';
+import {
+  CONTRACT_STATUSES,
+  CONTRACT_TYPES,
+  contractStatusDot,
+  contractStatusLabel,
+  contractTypeDot,
+  contractTypeLabel,
+  isInfoIncomplete,
+} from '@/lib/contract-constants';
 import { type ContractQuery, type ContractSort } from '@/lib/contract-query';
+import { formatDateKST } from '@/lib/format-date';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -26,23 +38,14 @@ const nf = new Intl.NumberFormat('ko-KR');
 /** 한 화면에 그리는 최대 행 수 — 넘치면 잘렸다는 사실을 화면에 명시한다 (조용한 절삭 금지) */
 const MAX_ROWS = 500;
 
+/** 메모를 하나도 안 남긴 업체의 상태 코드 — CONTRACT_STATUSES 에는 없는, 화면 전용 값 */
+const NONE_STATUS = 'none';
+
 /** 비율 표시 — 전부 채워졌을 때만 100%. 99.6% 를 반올림해 "100% · 249/250" 처럼 모순되게 쓰지 않는다. */
 function pctText(part: number, total: number): string {
   if (total <= 0) return '0';
   if (part >= total) return '100';
   return String(Math.min(99, Math.floor((part / total) * 100)));
-}
-
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-    .format(date)
-    .replace(/\. /g, '.')
-    .replace(/\.$/, '');
 }
 
 /** 전화번호·주소 중 하나라도 비어 있는 상태 (Prisma where 절) */
@@ -84,6 +87,18 @@ function StatTile({
   );
 }
 
+/** 진행 상태 배지 — 점 + 라벨. 미분류는 중립 회색으로 다른 뜻(위험/경고)처럼 보이지 않게 한다. */
+function StatusBadge({ status }: { status: string | null }) {
+  const label = status ? contractStatusLabel(status) : '미분류';
+  const dot = status ? contractStatusDot(status) : 'var(--muted-foreground)';
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
+      {label}
+    </span>
+  );
+}
+
 export default async function ContractsPage({
   searchParams,
 }: {
@@ -95,20 +110,59 @@ export default async function ContractsPage({
   const q = first(sp.q).trim().slice(0, 100);
   const typeParam = first(sp.type);
   const activeType = CONTRACT_TYPES.some((t) => t.code === typeParam) ? typeParam : '';
+  const statusParam = first(sp.status);
+  const activeStatus =
+    CONTRACT_STATUSES.some((s) => s.code === statusParam) || statusParam === NONE_STATUS ? statusParam : '';
   const sort: ContractSort = first(sp.sort) === 'name' ? 'name' : 'latest';
   const onlyIncomplete = first(sp.incomplete) === '1';
-  const query: ContractQuery = { q, type: activeType, sort, incomplete: onlyIncomplete };
+  const query: ContractQuery = { q, type: activeType, status: activeStatus, sort, incomplete: onlyIncomplete };
 
-  // 검색어: 업체명·전화번호·주소·담당자·메모 중 아무 곳이나 포함되면 매칭
+  // 검색어: 업체명·전화번호·주소·담당자·메모 중 아무 곳이나 포함되면 매칭.
+  // 메모는 이제 별도 타임라인(ContractMemo)이라, 그중 하나라도 검색어를 포함하면 매칭으로 친다.
   const searchOr: Prisma.ContractedVendorWhereInput = {
     OR: [
       { name: { contains: q, mode: 'insensitive' } },
       { phone: { contains: q } },
       { address: { contains: q, mode: 'insensitive' } },
       { managerName: { contains: q, mode: 'insensitive' } },
-      { memo: { contains: q, mode: 'insensitive' } },
+      { memos: { some: { content: { contains: q, mode: 'insensitive' } } } },
     ],
   };
+
+  // 계약 형태·진행 상태를 뺀 나머지 조건(검색어·정보 미비)만 담은 범위.
+  // "칩을 눌러도 숫자가 흔들리지 않는다"는 기존 규칙을, 이제 두 종류(형태/상태)의 칩에 함께 적용한다 —
+  // 각 칩 그룹의 카운트는 자기 자신만 뺀 나머지 조건(검색어·정보미비·다른 칩 그룹)을 전부 반영해야
+  // "이 칩을 누르면 몇 건이 보일지"가 정확히 맞는다.
+  const scopeWhere: Prisma.ContractedVendorWhereInput = {
+    AND: [...(q ? [searchOr] : []), ...(onlyIncomplete ? [INCOMPLETE_WHERE] : [])],
+  };
+
+  // 진행 상태는 "가장 최근 메모의 status" 로 정해지는데, 이건 Prisma 의 단순 관계 필터(memos: { some })로는
+  // 정확히 표현할 수 없다 — some 은 "메모들 중 하나라도" 를 뜻해 과거에 스쳐간 상태까지 걸리기 때문이다.
+  // 그래서 범위(검색어·정보미비) 안의 업체를 각자의 최신 메모 status 와 함께 우선 가져와 JS 에서
+  // 정확히 집계한다. 규모가 작은 내부 도구라 이 방식이 raw SQL 없이도 충분히 빠르고 정확하다.
+  const scopeRows = await prisma.contractedVendor.findMany({
+    where: scopeWhere,
+    select: { id: true, contractType: true, memos: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } },
+  });
+  const statusOf = (r: { memos: { status: string }[] }): string => r.memos[0]?.status ?? NONE_STATUS;
+
+  const scopeTotal = scopeRows.length;
+  const typeCounts = new Map<string, number>();
+  const statusCounts = new Map<string, number>();
+  for (const r of scopeRows) {
+    const st = statusOf(r);
+    // 형태별 카운트 — 현재 활성 상태 필터는 유지한 채로("이 형태를 누르면 몇 건") 집계
+    if (!activeStatus || st === activeStatus) {
+      typeCounts.set(r.contractType, (typeCounts.get(r.contractType) ?? 0) + 1);
+    }
+    // 상태별 카운트 — 현재 활성 형태 필터는 유지한 채로("이 상태를 누르면 몇 건") 집계
+    if (!activeType || r.contractType === activeType) {
+      statusCounts.set(st, (statusCounts.get(st) ?? 0) + 1);
+    }
+  }
+
+  const idsForActiveStatus = activeStatus ? scopeRows.filter((r) => statusOf(r) === activeStatus).map((r) => r.id) : null;
 
   // OR 를 쓰는 조건이 여럿이라 객체 스프레드로 합치면 서로 덮어쓴다 → AND 배열로 합칩니다.
   const listWhere: Prisma.ContractedVendorWhereInput = {
@@ -116,61 +170,69 @@ export default async function ContractsPage({
       ...(activeType ? [{ contractType: activeType }] : []),
       ...(q ? [searchOr] : []),
       ...(onlyIncomplete ? [INCOMPLETE_WHERE] : []),
+      ...(idsForActiveStatus ? [{ id: { in: idsForActiveStatus } }] : []),
     ],
   };
-  // 요약·칩 카운트의 기준 범위 — 계약 형태(칩)만 뺀 나머지 조건은 그대로 적용한다.
-  // 칩을 눌러도 숫자가 흔들리지 않으면서, 칩 숫자가 곧 클릭했을 때 보게 될 건수가 된다.
-  // ('정보 미비만 보기'는 칩 링크에도 유지되므로 여기서 빼면 숫자와 실제 목록이 어긋난다)
-  const scopeWhere: Prisma.ContractedVendorWhereInput = {
-    AND: [...(q ? [searchOr] : []), ...(onlyIncomplete ? [INCOMPLETE_WHERE] : [])],
-  };
 
-  const [vendors, typeCounts, incompleteCount] = await Promise.all([
+  const [vendors, incompleteCount] = await Promise.all([
     prisma.contractedVendor.findMany({
       where: listWhere,
       orderBy: sort === 'name' ? { name: 'asc' } : { createdAt: 'desc' },
       take: MAX_ROWS,
-    }),
-    prisma.contractedVendor.groupBy({
-      by: ['contractType'],
-      _count: { _all: true },
-      where: scopeWhere,
+      include: { memos: { orderBy: { createdAt: 'desc' }, take: 1 } },
     }),
     prisma.contractedVendor.count({ where: { AND: [scopeWhere, INCOMPLETE_WHERE] } }),
   ]);
 
-  const countByType = new Map(typeCounts.map((t) => [t.contractType, t._count._all]));
-  const scopeTotal = typeCounts.reduce((sum, t) => sum + t._count._all, 0);
   const completeCount = scopeTotal - incompleteCount;
   const completePct = scopeTotal > 0 ? (completeCount / scopeTotal) * 100 : 0;
   const completeLabel = pctText(completeCount, scopeTotal);
-  // 현재 조건(계약 형태 칩 포함)에 실제로 맞는 총 건수 — 표시 상한에 걸려도 진짜 숫자를 보여준다
-  const matchingTotal = activeType ? (countByType.get(activeType) ?? 0) : scopeTotal;
+  // 현재 조건(형태·상태 칩 포함)에 실제로 맞는 총 건수 — 표시 상한에 걸려도 진짜 숫자를 보여준다
+  const matchingTotal = activeStatus
+    ? (statusCounts.get(activeStatus) ?? 0)
+    : activeType
+      ? (typeCounts.get(activeType) ?? 0)
+      : scopeTotal;
   // '정보 미비만 보기' 상태에서는 완성도가 정의상 0% 라 아무 정보도 주지 못하므로 감춘다
   const showMeter = !onlyIncomplete;
 
   // 칩 카운트는 서버에서 계산해 넘긴다 (필터 조작은 클라이언트 컨트롤이 일괄 처리)
-  const chips = [
+  const typeChips = [
     { code: '', label: '전체', dot: '', count: scopeTotal },
     ...CONTRACT_TYPES.map((t) => ({
       code: t.code as string,
       label: t.label,
       dot: t.dotVar,
-      count: countByType.get(t.code) ?? 0,
+      count: typeCounts.get(t.code) ?? 0,
     })),
   ];
+  const statusChips = [
+    { code: '', label: '전체', dot: '', count: scopeTotal },
+    ...CONTRACT_STATUSES.map((s) => ({
+      code: s.code as string,
+      label: s.label,
+      dot: s.dotVar,
+      count: statusCounts.get(s.code) ?? 0,
+    })),
+    { code: NONE_STATUS, label: '미분류', dot: 'var(--muted-foreground)', count: statusCounts.get(NONE_STATUS) ?? 0 },
+  ];
 
-  const filterDesc = [q ? `"${q}" 검색` : '', activeType ? contractTypeLabel(activeType) : '', onlyIncomplete ? '정보 미비' : '']
+  const filterDesc = [
+    q ? `"${q}" 검색` : '',
+    activeType ? contractTypeLabel(activeType) : '',
+    activeStatus ? (activeStatus === NONE_STATUS ? '미분류' : contractStatusLabel(activeStatus)) : '',
+    onlyIncomplete ? '정보 미비' : '',
+  ]
     .filter(Boolean)
     .join(' · ');
 
   return (
     <>
       <AdminHeader />
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
         <div className="animate-fade-up mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 id={CONTRACTS_HEADING_ID} tabIndex={-1} className="text-xl font-bold tracking-tight outline-none">
+            <h1 className="text-xl font-bold tracking-tight">
               계약 업체 DB{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">{nf.format(matchingTotal)}곳</span>
             </h1>
@@ -178,9 +240,11 @@ export default async function ContractsPage({
               구두·서면으로 계약한 업체 명단입니다. 정보를 아직 못 받았어도 먼저 등록해두고 나중에 채우세요.
             </p>
           </div>
-          <Button render={<Link href="/vendors" />} variant="outline" size="sm">
+          {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.
+              Button render={<Link/>} 는 Base UI 가 비-button 요소라고 경고한다. */}
+          <Link href="/vendors" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             입점 업체 리스트
-          </Button>
+          </Link>
         </div>
 
         {/* 요약 — KPI 스탯 타일 4개 + 정보 완성도 미터 */}
@@ -189,10 +253,10 @@ export default async function ContractsPage({
             <StatTile label="전체" value={scopeTotal} />
             <StatTile
               label="계약서 작성"
-              value={countByType.get('written') ?? 0}
+              value={typeCounts.get('written') ?? 0}
               dot="var(--data-contract-written)"
             />
-            <StatTile label="구두 계약만" value={countByType.get('verbal') ?? 0} dot="var(--data-contract-verbal)" />
+            <StatTile label="구두 계약만" value={typeCounts.get('verbal') ?? 0} dot="var(--data-contract-verbal)" />
             <StatTile label="정보 미비" value={incompleteCount} tone="warning" />
           </dl>
 
@@ -221,7 +285,7 @@ export default async function ContractsPage({
 
         <ContractQuickAdd />
 
-        <ContractListControls query={query} chips={chips} />
+        <ContractListControls query={query} typeChips={typeChips} statusChips={statusChips} />
         <ContractResultStatus
           count={matchingTotal}
           filterDesc={filterDesc}
@@ -249,34 +313,28 @@ export default async function ContractsPage({
                   <TableHead>전화번호</TableHead>
                   <TableHead>주소</TableHead>
                   <TableHead>DB담당자</TableHead>
-                  <TableHead>메모</TableHead>
+                  <TableHead>진행 상태</TableHead>
                   <TableHead className="text-right">등록일</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {vendors.map((v, i) => {
                   const incomplete = isInfoIncomplete(v);
+                  const latestStatus = v.memos[0]?.status ?? null;
                   return (
-                    <ContractRow
-                      key={v.id}
-                      vendor={{ ...v, createdAt: v.createdAt.toISOString() }}
-                      style={{ animationDelay: `${180 + Math.min(i, 14) * 25}ms` }}
-                    >
+                    <ContractRow key={v.id} id={v.id} style={{ animationDelay: `${180 + Math.min(i, 14) * 25}ms` }}>
                       <TableCell>
-                        {/* 키보드용 트리거 — 클릭은 행으로 올라가 상세 모달이 열린다 */}
-                        <button
-                          type="button"
-                          className="group/edit flex items-center gap-1.5 rounded text-left font-medium transition-colors hover:text-[var(--brand-to)]"
+                        {/* 실제 링크 — 키보드로 Tab+Enter 접근이 되고, 클릭도 이 앵커가 그대로 처리한다
+                            (ContractRow 의 행 onClick 은 <a> 위 클릭은 건드리지 않고 비켜준다). */}
+                        <Link
+                          href={`/contracts/${v.id}`}
+                          className="group/edit flex items-center gap-1.5 font-medium transition-colors hover:text-[var(--brand-to)]"
                         >
                           <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
-                          <span
-                            aria-hidden
-                            className="text-xs text-neutral-500 transition-colors group-hover/edit:text-[var(--brand-to)]"
-                          >
-                            ✎
+                          <span aria-hidden className="text-xs text-neutral-400 group-hover/edit:text-[var(--brand-to)]">
+                            ›
                           </span>
-                          <span className="sr-only">상세 보기</span>
-                        </button>
+                        </Link>
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
@@ -290,6 +348,8 @@ export default async function ContractsPage({
                       </TableCell>
                       <TableCell className="tabular-nums">
                         {v.phone?.trim() ? (
+                          // stopPropagation 이 없어도 된다 — ContractRow 의 행 onClick 은
+                          // el.closest('a') 로 <a> 위 클릭을 이미 비켜준다.
                           <a href={`tel:${v.phone.replace(/[^0-9+]/g, '')}`} className="hover:underline">
                             {v.phone}
                           </a>
@@ -313,19 +373,11 @@ export default async function ContractsPage({
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{v.managerName || '-'}</TableCell>
-                      {/* 주소와 같은 이유로 안쪽 블록 요소에 max-width 를 건다.
-                          전체 내용은 title 로 확인할 수 있게 한다. */}
-                      <TableCell className="text-muted-foreground">
-                        {v.memo?.trim() ? (
-                          <span className="block max-w-72 truncate" title={v.memo}>
-                            {v.memo}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400">-</span>
-                        )}
+                      <TableCell>
+                        <StatusBadge status={latestStatus} />
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground tabular-nums">
-                        {formatDate(v.createdAt)}
+                        {formatDateKST(v.createdAt)}
                         {incomplete && <span className="sr-only"> (정보 미비)</span>}
                       </TableCell>
                     </ContractRow>

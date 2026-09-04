@@ -27,7 +27,6 @@ export async function POST(request: Request) {
       phone: data.phone,
       address: data.address,
       managerName: data.managerName,
-      memo: data.memo,
     },
   });
 

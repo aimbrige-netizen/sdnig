@@ -7,6 +7,8 @@ export type ContractSort = 'latest' | 'name';
 export interface ContractQuery {
   q: string;
   type: string;
+  /** 진행 상태 필터 — ContractStatus 코드 하나, 또는 아직 메모가 없는 곳만 보는 'none', 또는 전체('') */
+  status: string;
   sort: ContractSort;
   incomplete: boolean;
 }
@@ -17,6 +19,7 @@ export function buildContractsUrl(current: ContractQuery, changes: Partial<Contr
   const params = new URLSearchParams();
   if (next.q.trim()) params.set('q', next.q.trim());
   if (next.type) params.set('type', next.type);
+  if (next.status) params.set('status', next.status);
   if (next.sort !== 'latest') params.set('sort', next.sort);
   if (next.incomplete) params.set('incomplete', '1');
   const qs = params.toString();

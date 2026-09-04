@@ -25,14 +25,70 @@ export interface ContractChip {
 
 interface ContractListControlsProps {
   query: ContractQuery;
-  chips: ContractChip[];
+  typeChips: ContractChip[];
+  statusChips: ContractChip[];
 }
 
 function sigOf(q: ContractQuery): string {
-  return JSON.stringify([q.q, q.type, q.sort, q.incomplete]);
+  return JSON.stringify([q.q, q.type, q.status, q.sort, q.incomplete]);
 }
 
-export function ContractListControls({ query, chips }: ContractListControlsProps) {
+/** 칩 한 줄 — 계약 형태·진행 상태 두 그룹이 같은 모양·같은 클릭 규칙을 공유한다 */
+function ChipRow({
+  label,
+  chips,
+  activeCode,
+  queryKey,
+  effective,
+  text,
+  navigate,
+}: {
+  label: string;
+  chips: ContractChip[];
+  activeCode: string;
+  queryKey: 'type' | 'status';
+  effective: ContractQuery;
+  text: string;
+  navigate: (changes: Partial<ContractQuery>) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {chips.map((c) => {
+          const isActive = c.code === activeCode;
+          return (
+            <Link
+              key={c.code || 'all'}
+              href={buildContractsUrl(effective, { q: text, [queryKey]: c.code })}
+              prefetch={false}
+              aria-current={isActive ? 'true' : undefined}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 새 탭 등은 기본 동작
+                e.preventDefault();
+                navigate({ [queryKey]: c.code });
+              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all duration-200',
+                isActive
+                  ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
+                  : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
+              )}
+            >
+              {c.dot && <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: c.dot }} />}
+              {c.label}
+              <span className={cn('text-xs tabular-nums', isActive ? 'text-white/75' : 'text-neutral-500')}>
+                {c.count}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function ContractListControls({ query, typeChips, statusChips }: ContractListControlsProps) {
   const router = useRouter();
   const [text, setText] = useState(query.q);
   // 사용자가 마지막으로 "요청한" 필터 상태. 서버 응답이 커밋되기 전까지 props(query)는
@@ -91,40 +147,32 @@ export function ContractListControls({ query, chips }: ContractListControlsProps
 
   return (
     <div className="mb-4 space-y-3">
-      {/* 계약 형태 칩 — Link 지만 클릭은 navigate() 로 가로채 대기 중인 검색을 함께 정리한다.
+      {/* 계약 형태·진행 상태 칩 두 줄 — Link 지만 클릭은 navigate() 로 가로채 대기 중인 검색을 함께 정리한다.
           (href 는 그대로 두어 새 탭 열기·주소 복사 같은 기본 동작을 유지)
           prefetch={false} 인 이유: 이 칩들은 현재 페이지와 같은 경로(/contracts)를 가리켜,
           프리페치 응답이 저장 직후 갱신된 목록을 "저장 전" 스냅샷으로 덮어쓴다.
-          클릭은 어차피 onClick 이 가로채므로 프리페치의 이점도 없다. */}
-      <div className="animate-fade-up flex flex-wrap gap-2" style={{ animationDelay: '120ms' }}>
-        {chips.map((c) => {
-          const isActive = c.code === effective.type;
-          return (
-            <Link
-              key={c.code || 'all'}
-              href={buildContractsUrl(effective, { q: text, type: c.code })}
-              prefetch={false}
-              aria-current={isActive ? 'true' : undefined}
-              onClick={(e) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 새 탭 등은 기본 동작
-                e.preventDefault();
-                navigate({ type: c.code });
-              }}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm transition-all duration-200',
-                isActive
-                  ? 'border-neutral-900 bg-neutral-900 text-white shadow-sm'
-                  : 'border-black/10 bg-white text-neutral-600 hover:border-black/20 hover:text-neutral-900 hover:shadow-soft'
-              )}
-            >
-              {c.dot && <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: c.dot }} />}
-              {c.label}
-              <span className={cn('text-xs tabular-nums', isActive ? 'text-white/75' : 'text-neutral-500')}>
-                {c.count}
-              </span>
-            </Link>
-          );
-        })}
+          클릭은 어차피 onClick 이 가로채므로 프리페치의 이점도 없다.
+          두 그룹은 서로 다른 쿼리 키(type/status)를 써서 동시에 켤 수 있다 — 형태를 고르면서
+          동시에 진행 상태로도 좁힐 수 있다. */}
+      <div className="animate-fade-up space-y-2" style={{ animationDelay: '120ms' }}>
+        <ChipRow
+          label="계약 형태"
+          chips={typeChips}
+          activeCode={effective.type}
+          queryKey="type"
+          effective={effective}
+          text={text}
+          navigate={navigate}
+        />
+        <ChipRow
+          label="진행 상태"
+          chips={statusChips}
+          activeCode={effective.status}
+          queryKey="status"
+          effective={effective}
+          text={text}
+          navigate={navigate}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
