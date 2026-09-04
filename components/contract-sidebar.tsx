@@ -10,7 +10,7 @@ import { BrandLoader } from '@/components/brand-loader';
 import { deleteContract, updateContract } from '@/app/contracts/actions';
 import { contractPayloadSchema } from '@/lib/contract-schema';
 import { contractTypeDot, contractTypeLabel } from '@/lib/contract-constants';
-import { formatDateKST } from '@/lib/format-date';
+import { formatDateTimeKST } from '@/lib/format-date';
 import {
   CONTRACT_FIELD_LABELS,
   ContractFields,
@@ -125,11 +125,11 @@ export function ContractSidebar({ vendor }: ContractSidebarProps) {
   }
 
   return (
-    <aside className="card-surface animate-fade-up p-5 lg:sticky lg:top-20 lg:w-80">
+    <aside className="card-surface animate-fade-up overflow-hidden lg:sticky lg:top-20 lg:w-80">
       {errors.length > 0 && (
         <div
           role="alert"
-          className="mb-3 rounded-lg border border-destructive/40 bg-red-50 p-2.5 text-xs text-destructive"
+          className="m-5 mb-0 rounded-lg border border-destructive/40 bg-red-50 p-2.5 text-xs text-destructive"
         >
           <ul className="list-inside list-disc space-y-0.5">
             {errors.map((msg) => (
@@ -144,7 +144,7 @@ export function ContractSidebar({ vendor }: ContractSidebarProps) {
           <BrandLoader label={deleting ? '삭제 중' : '저장 중'} />
         </div>
       ) : editing ? (
-        <>
+        <div className="p-5">
           <ContractFields state={state} patch={patch} narrow />
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => { setEditing(false); setState(latest); setErrors([]); }}>
@@ -154,45 +154,50 @@ export function ContractSidebar({ vendor }: ContractSidebarProps) {
               저장
             </Button>
           </div>
-        </>
+        </div>
       ) : (
         <>
-          {/* 업체명·전화번호 — 요청대로 가장 크게, 맨 위에 */}
-          <h1 className="text-lg font-bold break-words">{latest.name}</h1>
-          <p className="mt-1">
-            {latest.phone.trim() ? (
-              <a
-                href={`tel:${latest.phone.replace(/[^0-9+]/g, '')}`}
-                className="text-base font-medium text-[var(--brand-to)] hover:underline"
-              >
-                {latest.phone}
-              </a>
-            ) : (
-              <span className="text-sm" style={{ color: 'var(--data-warning-ink)' }}>
-                전화번호 미입력
-              </span>
-            )}
-          </p>
+          {/* 정체성 밴드 — 업체명·전화번호를 가장 크게, 옅은 브랜드 틴트로 나머지와 구분한다 */}
+          <div className="border-b border-black/[0.06] p-5 pb-[18px]" style={{ backgroundColor: 'var(--accent)' }}>
+            <h1 className="text-lg font-bold break-words">{latest.name}</h1>
+            <p className="mt-1.5">
+              {latest.phone.trim() ? (
+                <a
+                  href={`tel:${latest.phone.replace(/[^0-9+]/g, '')}`}
+                  className="text-base font-medium text-[var(--brand-to)] hover:underline"
+                >
+                  {latest.phone}
+                </a>
+              ) : (
+                <span className="text-sm" style={{ color: 'var(--data-warning-ink)' }}>
+                  전화번호 미입력
+                </span>
+              )}
+            </p>
 
-          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: contractTypeDot(latest.contractType) }}
-            />
-            {contractTypeLabel(latest.contractType)}
-          </span>
+            <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs text-neutral-700">
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: contractTypeDot(latest.contractType) }}
+              />
+              {contractTypeLabel(latest.contractType)}
+            </span>
+          </div>
 
-          <dl className="mt-4 divide-y divide-black/[0.06] border-t border-black/[0.06]">
+          <dl className="divide-y divide-black/[0.06] px-5">
             <InfoRow label="주소" value={latest.address} />
             <InfoRow label="DB담당자" value={latest.managerName} />
             <div className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
-              <dt className="text-xs text-muted-foreground">등록일</dt>
-              <dd className="tabular-nums">{formatDateKST(vendor.createdAt)}</dd>
+              <dt className="text-xs text-muted-foreground">등록일시</dt>
+              <dd className="tabular-nums">{formatDateTimeKST(vendor.createdAt)}</dd>
             </div>
           </dl>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div
+            className="flex flex-wrap items-center gap-2 border-t border-black/[0.06] p-5"
+            style={{ backgroundColor: 'var(--contracts-panel)' }}
+          >
             <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
               수정
             </Button>
