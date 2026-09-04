@@ -52,8 +52,13 @@ function ChipRow({
   navigate: (changes: Partial<ContractQuery>) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="w-16 shrink-0 text-xs text-muted-foreground">{label}</span>
+    // role="group" + aria-label — 두 칩 줄 모두 '전체' 라는 같은 텍스트·같은 숫자의 링크를 하나씩
+    // 갖고 있어(계약 형태 전체 / 진행 상태 전체), 프로그램적으로 묶어두지 않으면 스크린리더의
+    // 링크 목록에서 어느 줄의 '전체'인지 구분이 안 된다.
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={label}>
+      <span className="w-16 shrink-0 text-xs text-muted-foreground" aria-hidden>
+        {label}
+      </span>
       <div className="flex flex-wrap gap-2">
         {chips.map((c) => {
           const isActive = c.code === activeCode;

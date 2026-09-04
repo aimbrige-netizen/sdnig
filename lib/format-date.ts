@@ -25,11 +25,6 @@ export function formatDateTimeKST(date: Date | string): string {
   return `${formatDateKST(d)} ${time}`;
 }
 
-/** <input type="date"> 가 쓰는 YYYY-MM-DD (KST 기준) — memoDate 는 자정 UTC로 저장돼 있어 그대로 slice 해도 어긋나지 않는다 */
-export function toDateInputValue(date: Date | string): string {
-  return new Date(date).toISOString().slice(0, 10);
-}
-
 /** 오늘 날짜를 KST 기준 YYYY-MM-DD 로 — 브라우저의 로컬 타임존을 믿지 않고 명시적으로 서울 기준을 쓴다 */
 export function todayKST(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date());

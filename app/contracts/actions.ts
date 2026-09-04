@@ -115,7 +115,12 @@ export async function deleteContract(id: number): Promise<ActionResult> {
   }
 
   revalidatePath('/contracts');
-  refresh(); // 클라이언트 라우터 캐시까지 갱신 — 저장 직후 목록에 바로 반영된다
+  // refresh() 를 쓰지 않는다 — 이 액션의 유일한 호출부(ContractSidebar)는 성공하면 항상
+  // router.push('/contracts') 로 떠난다. refresh() 는 "지금 떠 있는 라우트"를 서버가 방금 만든
+  // 값으로 다시 그리게 하는데, 지금 떠 있는 라우트는 바로 이 삭제된 업체의 상세 페이지
+  // (/contracts/[id]) 자신이다 — 그 라우트를 다시 그리면 notFound() 가 실행돼, push 가 이어지기
+  // 직전 순간에 스타일 없는 기본 404 화면이 한 번 스쳐 지나간다. revalidatePath 만으로도
+  // 도착할 /contracts 목록은 새 데이터로 뜬다(캐시 무효화는 이동할 때도 적용된다).
   return { ok: true };
 }
 

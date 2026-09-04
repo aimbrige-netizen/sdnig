@@ -26,6 +26,10 @@ export function ContractMemoComposer({ contractedVendorId, onCreated }: Contract
   const [content, setContent] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  // 저장 성공을 스크린리더에도 알린다 — 타임라인은 시각적으로 바로 갱신되지만, 화면을 안 보는
+  // 사용자는 이 문구가 없으면 저장이 됐는지 알 방법이 없다(quick-add 의 기존 패턴과 동일).
+  // 값 자체보다 "바뀌었다"는 사실이 중요해 매 저장마다 1씩 늘리기만 한다.
+  const [savedCount, setSavedCount] = useState(0);
 
   async function handleSubmit() {
     if (saving) return;
@@ -56,6 +60,7 @@ export function ContractMemoComposer({ contractedVendorId, onCreated }: Contract
       setStatus(null);
       setContent('');
       setMemoDate(todayKST());
+      setSavedCount((n) => n + 1);
     } catch {
       setErrors(['네트워크 오류로 저장하지 못했습니다. 다시 시도해주세요.']);
     } finally {
@@ -82,7 +87,7 @@ export function ContractMemoComposer({ contractedVendorId, onCreated }: Contract
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1.5" aria-label="진행 상태">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="진행 상태">
           {CONTRACT_STATUSES.map((s) => {
             const isActive = s.code === status;
             return (
@@ -141,6 +146,9 @@ export function ContractMemoComposer({ contractedVendorId, onCreated }: Contract
         />
       </div>
 
+      <p aria-live="polite" className="sr-only">
+        {savedCount > 0 && '메모를 저장했습니다.'}
+      </p>
       <div className="mt-3 flex items-center justify-end gap-2">
         {saving && <BrandLoader size="sm" label="" className="mr-1" />}
         <Button type="button" size="sm" onClick={handleSubmit} disabled={saving}>

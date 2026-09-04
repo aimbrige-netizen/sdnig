@@ -15,10 +15,15 @@ interface ContractMemoTimelineProps {
 
 function MemoEntry({ memo, onDeleted }: { memo: ContractMemoDTO; onDeleted: (memoId: number) => void }) {
   const [deleting, setDeleting] = useState(false);
+  // 방금 낙관적으로 얹힌, 서버가 아직 확정하지 않은 메모(임시 음수 id — contract-memo-composer.tsx
+  // 참고). 이 상태에서 삭제를 누르면 deleteContractMemo 가 "존재하지 않는 메모"로 거부해 사용자만
+  // 당황하므로, 서버 확정 전까지는 삭제 버튼을 잠가둔다.
+  const pending = memo.id < 0;
 
   async function handleDelete() {
-    if (deleting) return;
-    if (!window.confirm('이 메모를 삭제할까요? 되돌릴 수 없습니다.')) return;
+    if (deleting || pending) return;
+    const label = `${contractStatusLabel(memo.status)} · ${formatDateKST(memo.memoDate)}`;
+    if (!window.confirm(`'${label}' 메모를 삭제할까요? 되돌릴 수 없습니다.`)) return;
     setDeleting(true);
     try {
       const result = await deleteContractMemo(memo.id);
@@ -49,12 +54,14 @@ function MemoEntry({ memo, onDeleted }: { memo: ContractMemoDTO; onDeleted: (mem
           <span className="text-xs text-muted-foreground tabular-nums">{formatDateKST(memo.memoDate)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-neutral-400 tabular-nums">{formatDateTimeKST(memo.createdAt)} 기록</span>
+          <span className="text-xs text-neutral-400 tabular-nums">
+            {pending ? '저장 중...' : `${formatDateTimeKST(memo.createdAt)} 기록`}
+          </span>
           <button
             type="button"
             onClick={handleDelete}
-            disabled={deleting}
-            aria-label="메모 삭제"
+            disabled={deleting || pending}
+            aria-label={`${contractStatusLabel(memo.status)} · ${formatDateKST(memo.memoDate)} 메모 삭제`}
             className="grid size-6 place-items-center rounded text-neutral-400 transition-colors hover:bg-neutral-900/5 hover:text-destructive disabled:opacity-50"
           >
             ×

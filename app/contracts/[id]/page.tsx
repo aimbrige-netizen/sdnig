@@ -17,7 +17,8 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
 
   const vendor = await prisma.contractedVendor.findUnique({
     where: { id: numId },
-    include: { memos: { orderBy: { createdAt: 'desc' } } },
+    // id 를 2차 정렬키로 — 같은 밀리초에 찍힌 메모라도 항상 같은 순서로 보이게 한다.
+    include: { memos: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] } },
   });
   if (!vendor) notFound();
 

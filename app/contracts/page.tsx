@@ -141,9 +141,16 @@ export default async function ContractsPage({
   // 정확히 표현할 수 없다 — some 은 "메모들 중 하나라도" 를 뜻해 과거에 스쳐간 상태까지 걸리기 때문이다.
   // 그래서 범위(검색어·정보미비) 안의 업체를 각자의 최신 메모 status 와 함께 우선 가져와 JS 에서
   // 정확히 집계한다. 규모가 작은 내부 도구라 이 방식이 raw SQL 없이도 충분히 빠르고 정확하다.
+  // createdAt 만으로 정렬하면 같은 밀리초에 찍힌 메모 사이의 순서를 Postgres 가 보장하지 않는다
+  // (시드 스크립트나 거의 동시에 남긴 메모에서 실제로 발생할 수 있다) — id 를 2차 정렬키로 더해
+  // "가장 최근 메모"가 요청마다 바뀌는 일이 없게 한다.
   const scopeRows = await prisma.contractedVendor.findMany({
     where: scopeWhere,
-    select: { id: true, contractType: true, memos: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } },
+    select: {
+      id: true,
+      contractType: true,
+      memos: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { status: true } },
+    },
   });
   const statusOf = (r: { memos: { status: string }[] }): string => r.memos[0]?.status ?? NONE_STATUS;
 
@@ -179,10 +186,17 @@ export default async function ContractsPage({
       where: listWhere,
       orderBy: sort === 'name' ? { name: 'asc' } : { createdAt: 'desc' },
       take: MAX_ROWS,
-      include: { memos: { orderBy: { createdAt: 'desc' }, take: 1 } },
+      include: { memos: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 } },
     }),
     prisma.contractedVendor.count({ where: { AND: [scopeWhere, INCOMPLETE_WHERE] } }),
   ]);
+
+  // 각 칩 그룹의 "전체" 항목 — scopeTotal(검색어·정보미비만 반영) 을 그대로 쓰면 안 된다.
+  // 다른 축(형태/상태)에 이미 필터가 걸려 있을 때, "전체"를 눌러도 실제로는 그 다른 축의
+  // 필터는 유지된 채로 이 축만 풀리므로, 표시 숫자도 그 상태를 반영해야 한다 —
+  // 정확히 typeCounts/statusCounts 는 이미 그렇게 계산돼 있으니(153-162행) 그 합을 쓴다.
+  const typeScopeTotal = [...typeCounts.values()].reduce((a, b) => a + b, 0);
+  const statusScopeTotal = [...statusCounts.values()].reduce((a, b) => a + b, 0);
 
   const completeCount = scopeTotal - incompleteCount;
   const completePct = scopeTotal > 0 ? (completeCount / scopeTotal) * 100 : 0;
@@ -198,7 +212,7 @@ export default async function ContractsPage({
 
   // 칩 카운트는 서버에서 계산해 넘긴다 (필터 조작은 클라이언트 컨트롤이 일괄 처리)
   const typeChips = [
-    { code: '', label: '전체', dot: '', count: scopeTotal },
+    { code: '', label: '전체', dot: '', count: typeScopeTotal },
     ...CONTRACT_TYPES.map((t) => ({
       code: t.code as string,
       label: t.label,
@@ -207,7 +221,7 @@ export default async function ContractsPage({
     })),
   ];
   const statusChips = [
-    { code: '', label: '전체', dot: '', count: scopeTotal },
+    { code: '', label: '전체', dot: '', count: statusScopeTotal },
     ...CONTRACT_STATUSES.map((s) => ({
       code: s.code as string,
       label: s.label,
@@ -250,7 +264,9 @@ export default async function ContractsPage({
         {/* 요약 — KPI 스탯 타일 4개 + 정보 완성도 미터 */}
         <section className="card-surface animate-fade-up mb-4 overflow-hidden" style={{ animationDelay: '40ms' }}>
           <dl className="grid grid-cols-2 divide-x divide-y divide-black/[0.06] sm:grid-cols-4 sm:divide-y-0">
-            <StatTile label="전체" value={scopeTotal} />
+            {/* typeScopeTotal 을 쓴다 — 옆의 두 타일(계약서 작성/구두 계약만)이 진행 상태 필터를
+                반영해 줄어들 수 있는데, "전체"가 그 둘의 합과 안 맞으면 산수가 깨져 보인다. */}
+            <StatTile label="전체" value={typeScopeTotal} />
             <StatTile
               label="계약서 작성"
               value={typeCounts.get('written') ?? 0}
