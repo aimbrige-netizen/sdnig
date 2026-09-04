@@ -7,7 +7,10 @@ export default function Loading() {
   return (
     <>
       <AdminHeader />
-      <main className="grid w-full place-items-center px-4 py-32">
+      <main
+        className="grid min-h-[80vh] w-full place-items-center px-4 py-32"
+        style={{ backgroundColor: 'var(--contracts-bg)' }}
+      >
         <BrandLoader size="lg" label="계약 업체 정보 불러오는 중" />
       </main>
     </>

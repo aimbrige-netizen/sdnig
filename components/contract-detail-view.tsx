@@ -51,7 +51,7 @@ export function ContractDetailView({ vendor }: ContractDetailViewProps) {
   }
 
   return (
-    <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <main className="w-full px-4 py-6 sm:px-6 lg:px-8" style={{ backgroundColor: 'var(--contracts-bg)' }}>
       <div className="animate-fade-up mb-5">
         <Link href="/contracts" className="text-sm text-muted-foreground transition-colors hover:text-neutral-900">
           ← 계약 업체 DB

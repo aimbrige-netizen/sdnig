@@ -106,6 +106,14 @@
      흰 배경에서 원색은 대비가 낮아, 칩은 옅은 배경 + 진한 잉크 조합으로 대비를 확보합니다. */
   --data-warning-tint: #fffbeb;
   --data-warning-ink: #b45309; /* tint 위 4.84:1, 카드 위 5.02:1 */
+  /* 계약 업체 DB 전용 표면 단차 — "배경-카드-배지가 다 흰 톤이라 밋밋하다"는 피드백으로 추가.
+     사이트 전역 --background/--card(로그인, 대시보드, 업체 리스트 등)는 그대로 두고, 이 페이지
+     안에서만 쓰는 3단 단차를 별도로 둔다. --contracts-inset 은 기존 배지 배경이던 뉴트럴-100
+     (#f5f5f5)보다 한 단계 더 짙어, 그 표면 기준으로 검증해둔 --data-status-* 점 색상의 대비는
+     이 변경으로 낮아지지 않고 오히려 더 벌어진다(밝은 점 vs 더 짙어진 배경). */
+  --contracts-bg: oklch(0.95 0.006 264);
+  --contracts-panel: oklch(0.965 0.005 264);
+  --contracts-inset: oklch(0.945 0.007 264);
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);

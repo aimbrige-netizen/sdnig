@@ -3,12 +3,16 @@
 // 계약서를 쓴 곳과 구두로만 한 곳을 구분해 관리합니다.
 //
 // 업체마다 진행 메모를 여러 번 남길 수 있고(상세 페이지 참고), 그중 가장 최근 메모의
-// 상태(재컨텍요망/상담예정/상담완료/계약완료)가 그 업체의 "현재 상태"입니다. 아직 메모를
+// 상태(재컨텍요망/미팅예정/미팅완료/계약완료)가 그 업체의 "현재 상태"입니다. 아직 메모를
 // 하나도 안 남긴 곳은 "미분류"로 둡니다.
 //
 // 요약부는 차트가 아니라 KPI 스탯 타일 + 미터입니다(dataviz: "몇 개의 헤드라인 숫자" → KPI row,
 // "한계 대비 비율 하나" → 미터). 색은 계약 형태를 가르는 점(mark)과 경고 상태에만 쓰고,
 // 숫자·라벨은 항상 잉크 색을 유지합니다.
+//
+// 표면은 3단 단차를 씁니다 — 페이지 배경(--contracts-bg, 가장 짙음) → 카드(흰색) →
+// 배지/테이블 헤더 같은 인셋 요소(--contracts-inset). 순백 하나로 퉁치던 전 버전이
+// "밋밋하다"는 피드백을 받아 나눴습니다.
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import { AdminHeader } from '@/components/admin-header';
@@ -28,7 +32,7 @@ import {
   isInfoIncomplete,
 } from '@/lib/contract-constants';
 import { type ContractQuery, type ContractSort } from '@/lib/contract-query';
-import { formatDateKST } from '@/lib/format-date';
+import { formatDateKST, formatDateTimeKST } from '@/lib/format-date';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +44,14 @@ const MAX_ROWS = 500;
 
 /** 메모를 하나도 안 남긴 업체의 상태 코드 — CONTRACT_STATUSES 에는 없는, 화면 전용 값 */
 const NONE_STATUS = 'none';
+
+/** YYYY-MM-DD 형태이면서 실제로 존재하는 날짜인지 — 존재하지 않는 날짜(2월 30일 등)는
+ *  new Date() 가 조용히 다음 달로 굴려버리므로 왕복 비교로 걸러낸다. */
+function parseDateParam(v: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
+}
 
 /** 비율 표시 — 전부 채워졌을 때만 100%. 99.6% 를 반올림해 "100% · 249/250" 처럼 모순되게 쓰지 않는다. */
 function pctText(part: number, total: number): string {
@@ -53,7 +65,7 @@ const INCOMPLETE_WHERE: Prisma.ContractedVendorWhereInput = {
   OR: [{ phone: null }, { phone: '' }, { address: null }, { address: '' }],
 };
 
-/** 스탯 타일 — 라벨 + 값. 큰 단독 숫자라 tabular-nums 를 쓰지 않습니다(비례 숫자). */
+/** 스탯 타일 — 라벨 + 값. 개별 카드로 떠 있어야 KPI 4개가 한 덩어리로 뭉개져 보이지 않는다. */
 function StatTile({
   label,
   value,
@@ -66,7 +78,7 @@ function StatTile({
   tone?: 'warning';
 }) {
   return (
-    <div className="px-5 py-4">
+    <div className="card-surface px-5 py-4">
       <dt className="flex items-center gap-1.5">
         {dot && (
           <span
@@ -82,7 +94,7 @@ function StatTile({
         )}
         <span className="truncate text-xs text-muted-foreground">{label}</span>
       </dt>
-      <dd className="mt-1 text-3xl font-semibold tracking-tight">{nf.format(value)}</dd>
+      <dd className="mt-1.5 text-3xl font-semibold tracking-tight">{nf.format(value)}</dd>
     </div>
   );
 }
@@ -92,7 +104,10 @@ function StatusBadge({ status }: { status: string | null }) {
   const label = status ? contractStatusLabel(status) : '미분류';
   const dot = status ? contractStatusDot(status) : 'var(--muted-foreground)';
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-neutral-700"
+      style={{ backgroundColor: 'var(--contracts-inset)' }}
+    >
       <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
       {label}
     </span>
@@ -115,7 +130,8 @@ export default async function ContractsPage({
     CONTRACT_STATUSES.some((s) => s.code === statusParam) || statusParam === NONE_STATUS ? statusParam : '';
   const sort: ContractSort = first(sp.sort) === 'name' ? 'name' : 'latest';
   const onlyIncomplete = first(sp.incomplete) === '1';
-  const query: ContractQuery = { q, type: activeType, status: activeStatus, sort, incomplete: onlyIncomplete };
+  const activeDate = parseDateParam(first(sp.date)) ?? '';
+  const query: ContractQuery = { q, type: activeType, status: activeStatus, sort, incomplete: onlyIncomplete, date: activeDate };
 
   // 검색어: 업체명·전화번호·주소·담당자·메모 중 아무 곳이나 포함되면 매칭.
   // 메모는 이제 별도 타임라인(ContractMemo)이라, 그중 하나라도 검색어를 포함하면 매칭으로 친다.
@@ -181,13 +197,28 @@ export default async function ContractsPage({
     ],
   };
 
+  // 날짜 검색 모드 — 계약 형태/진행 상태/검색어/정렬과는 독립된 별도 보기라 그 필터들과
+  // 조합하지 않는다(ContractListControls 쪽에서 이 필터들을 조작하면 date 를 함께 지운다).
+  // memoDate(실제 업무/미팅 날짜) 기준으로 모으되, 각 행에 기록 시각(createdAt)도 함께 보여준다.
+  const dateMemos = activeDate
+    ? await prisma.contractMemo.findMany({
+        where: { memoDate: new Date(`${activeDate}T00:00:00.000Z`) },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: { contractedVendor: { select: { id: true, name: true } } },
+      })
+    : null;
+
+  // incompleteCount 는 KPI 타일·완성도 미터에 항상 쓰이므로 날짜 검색 모드에서도 계산해야 한다 —
+  // 업체 테이블(vendors)만 날짜 모드에서 안 쓰인다.
   const [vendors, incompleteCount] = await Promise.all([
-    prisma.contractedVendor.findMany({
-      where: listWhere,
-      orderBy: sort === 'name' ? { name: 'asc' } : { createdAt: 'desc' },
-      take: MAX_ROWS,
-      include: { memos: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 } },
-    }),
+    activeDate
+      ? Promise.resolve([])
+      : prisma.contractedVendor.findMany({
+          where: listWhere,
+          orderBy: sort === 'name' ? { name: 'asc' } : { createdAt: 'desc' },
+          take: MAX_ROWS,
+          include: { memos: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1 } },
+        }),
     prisma.contractedVendor.count({ where: { AND: [scopeWhere, INCOMPLETE_WHERE] } }),
   ]);
 
@@ -243,15 +274,19 @@ export default async function ContractsPage({
   return (
     <>
       <AdminHeader />
-      <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
+      <main className="w-full px-4 py-6 sm:px-6 lg:px-8" style={{ backgroundColor: 'var(--contracts-bg)' }}>
         <div className="animate-fade-up mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold tracking-tight">
               계약 업체 DB{' '}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">{nf.format(matchingTotal)}곳</span>
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                {activeDate ? `${nf.format(dateMemos?.length ?? 0)}건` : `${nf.format(matchingTotal)}곳`}
+              </span>
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              구두·서면으로 계약한 업체 명단입니다. 정보를 아직 못 받았어도 먼저 등록해두고 나중에 채우세요.
+              {activeDate
+                ? '이 날짜에 남긴 메모를 업체 구분 없이 모아 보여줍니다.'
+                : '구두·서면으로 계약한 업체 명단입니다. 정보를 아직 못 받았어도 먼저 등록해두고 나중에 채우세요.'}
             </p>
           </div>
           {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.
@@ -261,153 +296,199 @@ export default async function ContractsPage({
           </Link>
         </div>
 
-        {/* 요약 — KPI 스탯 타일 4개 + 정보 완성도 미터 */}
-        <section className="card-surface animate-fade-up mb-4 overflow-hidden" style={{ animationDelay: '40ms' }}>
-          <dl className="grid grid-cols-2 divide-x divide-y divide-black/[0.06] sm:grid-cols-4 sm:divide-y-0">
-            {/* typeScopeTotal 을 쓴다 — 옆의 두 타일(계약서 작성/구두 계약만)이 진행 상태 필터를
-                반영해 줄어들 수 있는데, "전체"가 그 둘의 합과 안 맞으면 산수가 깨져 보인다. */}
-            <StatTile label="전체" value={typeScopeTotal} />
-            <StatTile
-              label="계약서 작성"
-              value={typeCounts.get('written') ?? 0}
-              dot="var(--data-contract-written)"
-            />
-            <StatTile label="구두 계약만" value={typeCounts.get('verbal') ?? 0} dot="var(--data-contract-verbal)" />
-            <StatTile label="정보 미비" value={incompleteCount} tone="warning" />
-          </dl>
+        {/* 요약 — KPI 스탯 타일 4개(개별 카드) + 정보 완성도 미터(별도 카드) */}
+        <div className="animate-fade-up mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4" style={{ animationDelay: '40ms' }}>
+          {/* typeScopeTotal 을 쓴다 — 옆의 두 타일(계약서 작성/구두 계약만)이 진행 상태 필터를
+              반영해 줄어들 수 있는데, "전체"가 그 둘의 합과 안 맞으면 산수가 깨져 보인다. */}
+          <StatTile label="전체" value={typeScopeTotal} />
+          <StatTile label="계약서 작성" value={typeCounts.get('written') ?? 0} dot="var(--data-contract-written)" />
+          <StatTile label="구두 계약만" value={typeCounts.get('verbal') ?? 0} dot="var(--data-contract-verbal)" />
+          <StatTile label="정보 미비" value={incompleteCount} tone="warning" />
+        </div>
 
-          {showMeter && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-5 py-3.5">
-              <span className="text-xs text-muted-foreground">정보 완성도</span>
-              <div className="min-w-40 flex-1">
+        {showMeter && (
+          <div
+            className="card-surface animate-fade-up mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5"
+            style={{ animationDelay: '70ms' }}
+          >
+            <span className="text-xs text-muted-foreground">정보 완성도</span>
+            <div className="min-w-40 flex-1">
+              <div
+                className="h-2 w-full overflow-hidden rounded-full"
+                style={{ backgroundColor: 'var(--meter-track)' }}
+                role="img"
+                aria-label={`정보 완성도 ${completeLabel}퍼센트 (전화번호·주소까지 받은 곳 ${completeCount} / ${scopeTotal})`}
+              >
                 <div
-                  className="h-2 w-full overflow-hidden rounded-full"
-                  style={{ backgroundColor: 'var(--meter-track)' }}
-                  role="img"
-                  aria-label={`정보 완성도 ${completeLabel}퍼센트 (전화번호·주소까지 받은 곳 ${completeCount} / ${scopeTotal})`}
-                >
-                  <div
-                    className="h-full rounded-full bg-brand-gradient transition-[width] duration-700 ease-out"
-                    style={{ width: `${Math.min(100, completePct)}%` }}
-                  />
-                </div>
+                  className="h-full rounded-full bg-brand-gradient transition-[width] duration-700 ease-out"
+                  style={{ width: `${Math.min(100, completePct)}%` }}
+                />
               </div>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {completeLabel}% · 전화번호·주소까지 받은 곳 {nf.format(completeCount)} / {nf.format(scopeTotal)}
-              </span>
             </div>
-          )}
-        </section>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {completeLabel}% · 전화번호·주소까지 받은 곳 {nf.format(completeCount)} / {nf.format(scopeTotal)}
+            </span>
+          </div>
+        )}
 
         <ContractQuickAdd />
 
         <ContractListControls query={query} typeChips={typeChips} statusChips={statusChips} />
-        <ContractResultStatus
-          count={matchingTotal}
-          filterDesc={filterDesc}
-          truncated={vendors.length >= MAX_ROWS}
-        />
 
-        {vendors.length === 0 ? (
-          <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-16 text-center">
-            <p className="text-muted-foreground">
-              {filterDesc ? `${filterDesc} 조건에 해당하는 업체가 없습니다.` : '아직 등록된 계약 업체가 없습니다.'}
+        {activeDate ? (
+          <>
+            <p className="mx-1 mb-2 text-xs text-muted-foreground">
+              {formatDateKST(`${activeDate}T00:00:00.000Z`)} 작업 내역 {nf.format(dateMemos?.length ?? 0)}건
             </p>
-            {!filterDesc && (
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                위의 &lsquo;업체 빠르게 추가&rsquo;를 펼쳐 업체명과 담당자만으로 등록할 수 있습니다.
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="card-surface animate-fade-up overflow-hidden" style={{ animationDelay: '160ms' }}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>업체명</TableHead>
-                  <TableHead>계약 형태</TableHead>
-                  <TableHead>전화번호</TableHead>
-                  <TableHead>주소</TableHead>
-                  <TableHead>DB담당자</TableHead>
-                  <TableHead>진행 상태</TableHead>
-                  <TableHead className="text-right">등록일</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vendors.map((v, i) => {
-                  const incomplete = isInfoIncomplete(v);
-                  const latestStatus = v.memos[0]?.status ?? null;
-                  return (
-                    <ContractRow key={v.id} id={v.id} style={{ animationDelay: `${180 + Math.min(i, 14) * 25}ms` }}>
-                      <TableCell>
-                        {/* 실제 링크 — 키보드로 Tab+Enter 접근이 되고, 클릭도 이 앵커가 그대로 처리한다
-                            (ContractRow 의 행 onClick 은 <a> 위 클릭은 건드리지 않고 비켜준다). */}
-                        <Link
-                          href={`/contracts/${v.id}`}
-                          className="group/edit flex items-center gap-1.5 font-medium transition-colors hover:text-[var(--brand-to)]"
+            {!dateMemos || dateMemos.length === 0 ? (
+              <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-16 text-center">
+                <p className="text-muted-foreground">이 날짜에 남긴 메모가 없습니다.</p>
+              </div>
+            ) : (
+              <ul className="card-surface animate-fade-up overflow-hidden" style={{ animationDelay: '160ms' }}>
+                {dateMemos.map((m, i) => (
+                  <li
+                    key={m.id}
+                    className="animate-fade-up border-b border-black/[0.06] px-5 py-4 last:border-b-0"
+                    style={{ animationDelay: `${180 + Math.min(i, 14) * 20}ms` }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
+                          style={{ backgroundColor: 'var(--contracts-inset)' }}
                         >
-                          <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
-                          <span aria-hidden className="text-xs text-neutral-400 group-hover/edit:text-[var(--brand-to)]">
-                            ›
-                          </span>
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
-                          <span
-                            aria-hidden
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: contractTypeDot(v.contractType) }}
-                          />
-                          {contractTypeLabel(v.contractType)}
+                          <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: contractStatusDot(m.status) }} />
+                          {contractStatusLabel(m.status)}
                         </span>
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {v.phone?.trim() ? (
-                          // stopPropagation 이 없어도 된다 — ContractRow 의 행 onClick 은
-                          // el.closest('a') 로 <a> 위 클릭을 이미 비켜준다.
-                          <a href={`tel:${v.phone.replace(/[^0-9+]/g, '')}`} className="hover:underline">
-                            {v.phone}
-                          </a>
-                        ) : (
-                          <span className="text-xs" style={{ color: 'var(--data-warning-ink)' }}>
-                            미입력
-                          </span>
-                        )}
-                      </TableCell>
-                      {/* max-width 는 table-layout:auto 인 <td> 에서 무시되므로,
-                          안쪽 블록 요소에 걸어야 긴 주소가 실제로 말줄임된다. */}
-                      <TableCell className="text-muted-foreground">
-                        {v.address?.trim() ? (
-                          <span className="block max-w-64 truncate" title={v.address}>
-                            {v.address}
-                          </span>
-                        ) : (
-                          <span className="text-xs" style={{ color: 'var(--data-warning-ink)' }}>
-                            미입력
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{v.managerName || '-'}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={latestStatus} />
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground tabular-nums">
-                        {formatDateKST(v.createdAt)}
-                        {incomplete && <span className="sr-only"> (정보 미비)</span>}
-                      </TableCell>
-                    </ContractRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-            {vendors.length >= MAX_ROWS && (
-              <p className="border-t px-4 py-3 text-xs" style={{ color: 'var(--data-warning-ink)' }}>
-                ▲ 최근 {nf.format(MAX_ROWS)}곳만 표시하고 있습니다 (조건에 맞는 업체는 {nf.format(matchingTotal)}곳).
-                검색어나 필터로 범위를 좁혀주세요.
-              </p>
+                        <Link href={`/contracts/${m.contractedVendor.id}`} className="text-sm font-semibold hover:underline">
+                          {m.contractedVendor.name}
+                        </Link>
+                      </div>
+                      <span className="text-xs text-neutral-400 tabular-nums">{formatDateTimeKST(m.createdAt)} 기록</span>
+                    </div>
+                    <p className="mt-2 text-sm whitespace-pre-wrap">{m.content}</p>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
+          </>
+        ) : (
+          <>
+            <ContractResultStatus count={matchingTotal} filterDesc={filterDesc} truncated={vendors.length >= MAX_ROWS} />
+
+            {vendors.length === 0 ? (
+              <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-16 text-center">
+                <p className="text-muted-foreground">
+                  {filterDesc ? `${filterDesc} 조건에 해당하는 업체가 없습니다.` : '아직 등록된 계약 업체가 없습니다.'}
+                </p>
+                {!filterDesc && (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    위의 &lsquo;업체 빠르게 추가&rsquo;를 펼쳐 업체명과 담당자만으로 등록할 수 있습니다.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="card-surface animate-fade-up overflow-hidden" style={{ animationDelay: '160ms' }}>
+                <Table>
+                  <TableHeader>
+                    <TableRow style={{ backgroundColor: 'var(--contracts-inset)' }}>
+                      <TableHead>업체명</TableHead>
+                      <TableHead>계약 형태</TableHead>
+                      <TableHead>전화번호</TableHead>
+                      <TableHead>주소</TableHead>
+                      <TableHead>DB담당자</TableHead>
+                      <TableHead>진행 상태</TableHead>
+                      <TableHead className="text-right">등록일시</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendors.map((v, i) => {
+                      const incomplete = isInfoIncomplete(v);
+                      const latestStatus = v.memos[0]?.status ?? null;
+                      return (
+                        <ContractRow
+                          key={v.id}
+                          id={v.id}
+                          style={{
+                            animationDelay: `${180 + Math.min(i, 14) * 25}ms`,
+                            backgroundColor: i % 2 === 1 ? 'oklch(0.98 0.003 264)' : undefined,
+                          }}
+                        >
+                          <TableCell>
+                            {/* 실제 링크 — 키보드로 Tab+Enter 접근이 되고, 클릭도 이 앵커가 그대로 처리한다
+                                (ContractRow 의 행 onClick 은 <a> 위 클릭은 건드리지 않고 비켜준다). */}
+                            <Link
+                              href={`/contracts/${v.id}`}
+                              className="group/edit flex items-center gap-1.5 font-medium transition-colors hover:text-[var(--brand-to)]"
+                            >
+                              <span className="underline-offset-4 group-hover/edit:underline">{v.name}</span>
+                              <span aria-hidden className="text-xs text-neutral-400 group-hover/edit:text-[var(--brand-to)]">
+                                ›
+                              </span>
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-neutral-700"
+                              style={{ backgroundColor: 'var(--contracts-inset)' }}
+                            >
+                              <span
+                                aria-hidden
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ backgroundColor: contractTypeDot(v.contractType) }}
+                              />
+                              {contractTypeLabel(v.contractType)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {v.phone?.trim() ? (
+                              // stopPropagation 이 없어도 된다 — ContractRow 의 행 onClick 은
+                              // el.closest('a') 로 <a> 위 클릭을 이미 비켜준다.
+                              <a href={`tel:${v.phone.replace(/[^0-9+]/g, '')}`} className="hover:underline">
+                                {v.phone}
+                              </a>
+                            ) : (
+                              <span className="text-xs" style={{ color: 'var(--data-warning-ink)' }}>
+                                미입력
+                              </span>
+                            )}
+                          </TableCell>
+                          {/* max-width 는 table-layout:auto 인 <td> 에서 무시되므로,
+                              안쪽 블록 요소에 걸어야 긴 주소가 실제로 말줄임된다. */}
+                          <TableCell className="text-muted-foreground">
+                            {v.address?.trim() ? (
+                              <span className="block max-w-64 truncate" title={v.address}>
+                                {v.address}
+                              </span>
+                            ) : (
+                              <span className="text-xs" style={{ color: 'var(--data-warning-ink)' }}>
+                                미입력
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{v.managerName || '-'}</TableCell>
+                          <TableCell>
+                            <StatusBadge status={latestStatus} />
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground tabular-nums">
+                            {formatDateTimeKST(v.createdAt)}
+                            {incomplete && <span className="sr-only"> (정보 미비)</span>}
+                          </TableCell>
+                        </ContractRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {vendors.length >= MAX_ROWS && (
+                  <p className="border-t px-4 py-3 text-xs" style={{ color: 'var(--data-warning-ink)' }}>
+                    ▲ 최근 {nf.format(MAX_ROWS)}곳만 표시하고 있습니다 (조건에 맞는 업체는 {nf.format(matchingTotal)}곳).
+                    검색어나 필터로 범위를 좁혀주세요.
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
       </main>
     </>

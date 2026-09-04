@@ -11,6 +11,9 @@ export interface ContractQuery {
   status: string;
   sort: ContractSort;
   incomplete: boolean;
+  /** 날짜로 작업 검색(YYYY-MM-DD) — 켜져 있으면 업체 목록 대신 그 날짜의 메모 전체를 모아 보여준다.
+   * 계약 형태·진행 상태·검색어·정렬과는 독립적인 별도 보기라, 그 필터들과 함께 조합되지 않는다. */
+  date: string;
 }
 
 /** 현재 필터 상태에서 일부만 바꾼 /contracts URL을 만듭니다. */
@@ -22,6 +25,7 @@ export function buildContractsUrl(current: ContractQuery, changes: Partial<Contr
   if (next.status) params.set('status', next.status);
   if (next.sort !== 'latest') params.set('sort', next.sort);
   if (next.incomplete) params.set('incomplete', '1');
+  if (next.date) params.set('date', next.date);
   const qs = params.toString();
   return qs ? `/contracts?${qs}` : '/contracts';
 }
