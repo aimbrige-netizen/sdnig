@@ -46,5 +46,6 @@ SELECT
 FROM "contracted_vendors"
 WHERE "memo" IS NOT NULL AND regexp_replace("memo", '^\s+|\s+$', '', 'g') <> '';
 
--- AlterTable
-ALTER TABLE "contracted_vendors" DROP COLUMN "memo";
+-- "memo" 컬럼은 일부러 지우지 않는다 — 운영 DB에 백업이 없어, 위 이관이 잘못됐을 때
+-- 원본을 대조할 방법이 이 컬럼뿐이다. Prisma 스키마에는 이미 이 필드가 없어 앱에서는
+-- 쓰지 않는다. 이관 결과가 충분히 검증되면 그때 별도 마이그레이션으로 지운다.
