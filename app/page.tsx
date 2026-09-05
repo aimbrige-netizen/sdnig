@@ -99,7 +99,7 @@ export default async function DashboardPage() {
   return (
     <>
       <AdminHeader />
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-shell px-4 py-6">
         <div className="mb-5 flex items-center justify-between">
           <h1 className="text-xl font-bold tracking-tight">수집 현황 대시보드</h1>
           {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.

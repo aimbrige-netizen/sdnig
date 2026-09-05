@@ -51,25 +51,34 @@ export function ContractDetailView({ vendor }: ContractDetailViewProps) {
   }
 
   return (
-    <main className="w-full px-4 py-6 sm:px-6 lg:px-8" style={{ backgroundColor: 'var(--contracts-bg)' }}>
-      <div className="animate-fade-up mb-5">
-        <Link href="/contracts" className="text-sm text-muted-foreground transition-colors hover:text-neutral-900">
-          ← 계약 업체 DB
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[20rem_1fr]">
-        <ContractSidebar vendor={vendor} />
-
-        {/* 본화면 — 메모 작성 + 타임라인. 남은 너비를 전부 쓴다. */}
-        <div className="min-w-0">
-          <ContractMemoComposer
-            contractedVendorId={vendor.id}
-            onCreated={(memo) => setMemos((prev) => [memo, ...prev])}
-          />
-          <ContractMemoTimeline memos={memos} onDeleted={(id) => setMemos((prev) => prev.filter((m) => m.id !== id))} />
+    // 배경색은 화면 전체를 덮는 바깥 div 가 칠하고, 본문만 max-w-shell 로 가운데 모은다.
+    // 배경을 <main> 에 그대로 두고 폭만 줄이면 좌우가 흰색으로 뜬다.
+    // 폭을 목록·헤더와 같은 토큰(app/globals.css)에 맞춘 이유: 여기만 화면 전체를 쓰고 있어서
+    // 목록에서 넘어오면 본문 왼쪽 줄이 헤더 로고와 어긋난 채로 튀었다.
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--contracts-bg)' }}>
+      <main className="mx-auto w-full max-w-shell px-4 py-6">
+        <div className="animate-fade-up mb-5">
+          <Link href="/contracts" className="text-sm text-muted-foreground transition-colors hover:text-neutral-900">
+            ← 계약 업체 DB
+          </Link>
         </div>
-      </div>
-    </main>
+
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[20rem_1fr]">
+          <ContractSidebar vendor={vendor} />
+
+          {/* 본화면 — 메모 작성 + 타임라인. 남은 너비를 전부 쓴다. */}
+          <div className="min-w-0">
+            <ContractMemoComposer
+              contractedVendorId={vendor.id}
+              onCreated={(memo) => setMemos((prev) => [memo, ...prev])}
+            />
+            <ContractMemoTimeline
+              memos={memos}
+              onDeleted={(id) => setMemos((prev) => prev.filter((m) => m.id !== id))}
+            />
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

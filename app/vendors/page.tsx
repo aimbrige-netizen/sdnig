@@ -114,7 +114,7 @@ export default async function VendorsPage({
   return (
     <>
       <AdminHeader />
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-shell px-4 py-6">
         <div className="mb-5 flex items-center justify-between">
           <h1 className="text-xl font-bold tracking-tight">
             업체 리스트 <span className="ml-1 text-sm font-normal text-muted-foreground">{vendors.length}개</span>

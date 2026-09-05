@@ -5,6 +5,14 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* 관리자 화면 공통 본문 폭 — max-w-shell 유틸리티가 여기서 만들어집니다.
+     헤더(components/admin-header.tsx)와 각 페이지의 <main> 이 반드시 같은 값을 써야
+     스크롤할 때 로고와 본문 왼쪽 줄이 어긋나 보이지 않습니다. 한 군데서만 바꿀 수 있게
+     토큰으로 둡니다 — 예전엔 max-w-6xl 이 9개 파일에 흩어져 있었습니다.
+     1152px 는 1920 모니터에서 좌우로 384px씩 남아 화면이 휑하다는 피드백을 받고 넓혔습니다.
+     주의: Tailwind v4 에는 max-w-8xl 같은 유틸리티가 없습니다. 없는 클래스를 쓰면
+     빌드 에러 없이 조용히 무시돼 폭 제한이 통째로 사라지므로, 반드시 이 토큰을 쓰세요. */
+  --container-shell: 100rem; /* 1600px */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);

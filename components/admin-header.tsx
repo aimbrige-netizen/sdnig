@@ -31,7 +31,7 @@ export function AdminHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-black/5 bg-white/75 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
+      <div className="mx-auto flex h-14 max-w-shell items-center justify-between gap-3 px-4">
         {/* 메뉴가 늘어나도 좁은 화면에서 글자가 세로로 쪼개지지 않도록,
             로고/버튼은 고정 폭을 지키고 메뉴만 가로 스크롤되게 합니다. */}
         <div className="flex min-w-0 items-center gap-4">
