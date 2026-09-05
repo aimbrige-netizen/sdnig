@@ -155,12 +155,9 @@ export function ContractListControls({ query, typeChips, statusChips }: Contract
   }, [text, effective.q]);
 
   return (
-    // 흰 카드들 사이에서 "지금 목록을 조작하는 영역"임을 표 나게 하려고, 옅게 눌린 톤의
-    // 패널로 감싼다(카드처럼 떠 보이면 안 되므로 그림자 없이 테두리만).
-    <div
-      className="animate-fade-up mb-4 rounded-2xl border border-black/[0.05] p-4"
-      style={{ backgroundColor: 'var(--contracts-panel)', animationDelay: '120ms' }}
-    >
+    // 다른 카드들과 같은 흰 카드 — 회색 패널로 따로 구분했더니 배경·배지 톤이랑 다 비슷해져서
+    // 오히려 산만해진다는 피드백을 받고 흰 카드로 되돌렸다.
+    <div className="card-surface animate-fade-up mb-4 p-4" style={{ animationDelay: '120ms' }}>
       {/* 계약 형태·진행 상태 칩 두 줄 — Link 지만 클릭은 navigate() 로 가로채 대기 중인 검색을 함께 정리한다.
           (href 는 그대로 두어 새 탭 열기·주소 복사 같은 기본 동작을 유지)
           prefetch={false} 인 이유: 이 칩들은 현재 페이지와 같은 경로(/contracts)를 가리켜,

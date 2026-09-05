@@ -69,12 +69,7 @@ export function ContractMemoComposer({ contractedVendorId, onCreated }: Contract
   }
 
   return (
-    // 흰 카드(card-surface)가 아니라 눌린 톤의 패널 — "지금 입력하는 곳"과 아래 타임라인의
-    // "이미 기록된 것"을 표면 단차로 구분한다.
-    <section
-      className="animate-fade-up mb-4 rounded-2xl border border-black/[0.05] p-5"
-      style={{ backgroundColor: 'var(--contracts-panel)' }}
-    >
+    <section className="card-surface animate-fade-up mb-4 p-5">
       <h2 className="text-sm font-semibold">새 메모 남기기</h2>
       <p className="mt-0.5 text-xs text-muted-foreground">진행 상태와 날짜를 고르고 내용을 적으면 아래에 쌓입니다.</p>
 

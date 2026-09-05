@@ -194,10 +194,7 @@ export function ContractSidebar({ vendor }: ContractSidebarProps) {
             </div>
           </dl>
 
-          <div
-            className="flex flex-wrap items-center gap-2 border-t border-black/[0.06] p-5"
-            style={{ backgroundColor: 'var(--contracts-panel)' }}
-          >
+          <div className="flex flex-wrap items-center gap-2 border-t border-black/[0.06] p-5">
             <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
               수정
             </Button>
