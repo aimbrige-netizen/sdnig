@@ -30,7 +30,7 @@ interface ContractListControlsProps {
 }
 
 function sigOf(q: ContractQuery): string {
-  return JSON.stringify([q.q, q.type, q.status, q.sort, q.incomplete, q.date]);
+  return JSON.stringify([q.q, q.type, q.status, q.sort, q.incomplete, q.date, q.month]);
 }
 
 /** 칩 한 줄 — 계약 형태·진행 상태 두 그룹이 같은 모양·같은 클릭 규칙을 공유한다 */
@@ -136,15 +136,13 @@ export function ContractListControls({ query, typeChips, statusChips }: Contract
     else router.push(url);
   }
 
-  /** 검색어만 반영 (히스토리 오염 방지를 위해 replace). 날짜 검색 모드는 별개 보기라 함께 끈다. */
+  /** 검색어만 반영 (히스토리 오염 방지를 위해 replace). 날짜 보기는 별개 보기라 함께 끈다.
+   *  달력이 펼쳐 놓은 달(month)은 목록을 거르는 조건이 아니라 그대로 둔다. */
   const submitSearch = (value: string) => go({ q: value.trim(), date: '' }, true);
 
   /** 칩·정렬·토글 — 대기 중인 검색 디바운스를 취소하고 현재 검색어를 함께 실어 보낸다.
-   *  날짜 검색 모드와는 독립적인 보기라, 이 컨트롤들을 조작하면 날짜 필터는 함께 꺼진다. */
+   *  날짜 보기와는 독립적인 보기라, 이 컨트롤들을 조작하면 날짜 선택은 함께 풀린다. */
   const navigate = (changes: Partial<ContractQuery>) => go({ q: text.trim(), date: '', ...changes }, false);
-
-  /** 날짜로 작업 검색 — 계약 형태·진행 상태·검색어·정렬은 건드리지 않고 date 만 바꾼다 */
-  const navigateDate = (date: string) => go({ date }, false);
 
   // 검색어는 입력을 멈추면 300ms 후 자동 반영
   useEffect(() => {
@@ -246,33 +244,19 @@ export function ContractListControls({ query, typeChips, statusChips }: Contract
           정보 미비만 보기
         </button>
 
-        {/* 날짜로 작업 검색 — 업체 구분 없이 그 날짜에 남긴 메모 전체를 모아 보여주는 별도 보기.
-            다른 컨트롤(칩·검색·정렬·토글)을 조작하면 이 필터는 자동으로 꺼진다(navigate 참고). */}
-        <div className="ml-auto flex items-center gap-1.5">
-          <label htmlFor="contract-date-search" className="text-xs text-muted-foreground">
-            날짜로 작업 검색
-          </label>
-          <input
-            id="contract-date-search"
-            type="date"
-            value={effective.date}
-            onChange={(e) => navigateDate(e.target.value)}
-            className={cn(
-              'h-9 rounded-md border border-input bg-white px-2 text-sm shadow-xs transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
-            )}
-          />
-          {effective.date && (
-            <button
-              type="button"
-              aria-label="날짜 검색 해제"
-              onClick={() => navigateDate('')}
-              className="grid size-6 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900"
-            >
-              ×
-            </button>
-          )}
-        </div>
+        {/* 날짜로 보는 기능은 여기 있던 날짜 입력칸 대신 오른쪽 캘린더로 옮겼다 —
+            날짜를 직접 타이핑하려면 "몇 일에 뭘 했는지"를 이미 알고 있어야 하는데,
+            정작 알고 싶은 게 그거였다(components/contract-calendar.tsx). */}
+        {effective.date && (
+          <button
+            type="button"
+            onClick={() => navigate({})}
+            className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-full border border-neutral-900 bg-neutral-900 px-3.5 text-sm text-white transition-colors hover:bg-neutral-700"
+          >
+            {effective.date} 보기 해제
+            <span aria-hidden>×</span>
+          </button>
+        )}
       </div>
     </div>
   );

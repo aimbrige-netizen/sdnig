@@ -8,17 +8,16 @@ import { TableRow } from '@/components/ui/table';
 
 interface ContractRowProps {
   id: number;
-  style?: React.CSSProperties;
   children: React.ReactNode; // <TableCell> 들
 }
 
-export function ContractRow({ id, style, children }: ContractRowProps) {
+export function ContractRow({ id, children }: ContractRowProps) {
   const router = useRouter();
 
   return (
-    <TableRow
-      className="animate-fade-up cursor-pointer"
-      style={style}
+    // 행마다 등장 애니메이션을 시차로 넣던 걸 걷어냈다 — 수십 줄이 순차로 밀려 들어오면
+    // 스캔을 시작하기까지 기다려야 해서, 목록에서는 그게 그냥 지연으로 느껴진다.
+    <TableRow className="cursor-pointer"
       onClick={(e) => {
         // 링크(전화걸기 등)는 자체 동작이 있으므로 그쪽에 맡긴다.
         const el = e.target as HTMLElement;

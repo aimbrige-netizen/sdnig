@@ -31,12 +31,14 @@ model ContractMemo {
   id                 Int              @id @default(autoincrement())
   contractedVendorId Int
   contractedVendor   ContractedVendor @relation(fields: [contractedVendorId], references: [id], onDelete: Cascade)
-  status             String // recontact(재컨텍요망) | scheduled(상담예정) | consulted(상담완료) | contracted(계약완료)
-  memoDate           DateTime         @db.Date // 상담예정일 등 사용자가 고른 날짜 — 시간 없이 날짜만
+  status             String // recontact(재컨텍요망) | longterm(장기가망) | scheduled(미팅예정) | consulted(미팅완료) | contracted(계약완료)
+  memoDate           DateTime         @db.Date // 미팅한(또는 미팅할) 날 — 사용자가 고르는 값. 시간 없이 날짜만
   content            String           @db.Text
-  createdAt          DateTime         @default(now())
+  createdAt          DateTime         @default(now()) // 실제로 기록한 시각. memoDate 와 다를 수 있다(지난 일을 나중에 적는 경우)
 
   @@index([contractedVendorId, createdAt])
+  // 목록 화면의 캘린더·활동 요약·날짜 보기가 전부 memoDate 로 훑는다(달력 한 장 = 42일치).
+  @@index([memoDate])
   @@map("contract_memos")
 }
 
