@@ -3,23 +3,17 @@
 //
 // 그래서 업체 명단보다 위에 둔다. 캘린더를 몇 달 전으로 넘겨놨든 여기는 언제나
 // 진짜 어제·오늘만 보여준다 — 넘겨본 달에 따라 "어제"가 달라지면 그건 요약이 아니다.
+//
+// 상태별 숫자 칸은 캘린더 모달·이 달 합계와 같은 조각(DayStatusGrid)을 쓴다.
 import Link from 'next/link';
-import { CONTRACT_STATUSES } from '@/lib/contract-constants';
 import { buildContractsUrl, type ContractQuery } from '@/lib/contract-query';
 import { formatDayHeadingKST } from '@/lib/format-date';
-import { cn } from '@/lib/utils';
+import { DayStatusGrid, statusTotal, type DayActivity } from './contract-day-stats';
 
-export interface DayActivity {
-  /** YYYY-MM-DD */
-  date: string;
-  /** 상태 코드 → 그 날 그 상태로 남긴 메모 건수 */
-  byStatus: Record<string, number>;
-  /** 그 날 새로 등록된 업체 수 */
-  newVendors: number;
-}
+export type { DayActivity };
 
 function DayRow({ title, day, query }: { title: string; day: DayActivity; query: ContractQuery }) {
-  const total = Object.values(day.byStatus).reduce((a, b) => a + b, 0);
+  const total = statusTotal(day.byStatus);
   const isActive = query.date === day.date;
 
   return (
@@ -39,36 +33,7 @@ function DayRow({ title, day, query }: { title: string; day: DayActivity; query:
         </Link>
       </div>
 
-      {/* 6칸 고정 — 날마다 칸이 생겼다 사라졌다 하면 같은 자리를 눈으로 못 찾는다 */}
-      <dl className="grid grid-cols-3 gap-y-2 sm:grid-cols-6">
-        {CONTRACT_STATUSES.map((s) => {
-          const n = day.byStatus[s.code] ?? 0;
-          return (
-            <div key={s.code}>
-              {/* 0 은 옅게 — "아무 일도 없었다"는 배경 정보라, 실제로 일어난 숫자가
-                  먼저 눈에 들어와야 한다. 라벨은 항상 또렷하게 둔다. */}
-              <dd className={cn('text-[22px] leading-none font-semibold tabular-nums', n === 0 && 'text-neutral-300')}>
-                {n}
-              </dd>
-              <dt className="mt-1.5 flex items-center gap-1 text-xs text-neutral-600">
-                <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: s.dotVar }} />
-                {s.label}
-              </dt>
-            </div>
-          );
-        })}
-        <div>
-          <dd
-            className={cn(
-              'text-[22px] leading-none font-semibold tabular-nums',
-              day.newVendors === 0 && 'text-neutral-300'
-            )}
-          >
-            {day.newVendors}
-          </dd>
-          <dt className="mt-1.5 text-xs text-neutral-600">신규 등록</dt>
-        </div>
-      </dl>
+      <DayStatusGrid byStatus={day.byStatus} newVendors={day.newVendors} className="grid-cols-3 sm:grid-cols-6" />
     </div>
   );
 }

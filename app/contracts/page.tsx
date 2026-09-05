@@ -17,7 +17,7 @@
 //
 // 표면은 딱 2단만 씁니다 — 페이지 배경(--contracts-bg) vs 흰 카드. 회색 톤을 여러 단계로
 // 잘게 나눴던 버전은 서로 너무 비슷해 오히려 산만하다는 피드백을 받고 걷어냈습니다.
-// 본문 폭은 헤더(components/admin-header.tsx)와 같은 max-w-6xl 로 맞춥니다 — 예전엔
+// 본문 폭은 헤더(components/admin-header.tsx)와 같은 max-w-shell 로 맞춥니다 — 예전엔
 // 화면 전체를 쓰다 보니 헤더와 어긋나고, 한 행이 가로로 늘어져 눈이 따라가기 힘들었습니다.
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
@@ -285,13 +285,20 @@ export default async function ContractsPage({
       where: { createdAt: { gte: kstDayStartUTC(yesterday), lt: kstDayStartUTC(addDaysYmd(today, 1)) } },
       select: { createdAt: true },
     }),
-    // 달력에 뿌릴 42칸치 메모 건수 (많아야 42행)
+    // 달력에 뿌릴 42칸치 메모 건수 — 상태까지 쪼개서 가져온다(날짜 모달이 상태별로 펼친다).
+    // 최악이라도 42일 × 상태 5개 = 210행이라 그냥 한 번에 받는다.
+    // ⚠️ 양쪽 경계 모두 dateOnlyUTC — 한쪽이라도 kstDayStartUTC 로 바꾸면 창이 9시간 밀려
+    //    첫 칸이 빠지고 화면에 없는 43일째가 딸려 들어온다.
     prisma.contractMemo.groupBy({
-      by: ['memoDate'],
+      by: ['memoDate', 'status'],
       where: { memoDate: { gte: dateOnlyUTC(gridRange.start), lt: dateOnlyUTC(gridRange.endExclusive) } },
       _count: { _all: true },
     }),
-    // 달력에 뿌릴 42칸치 신규 등록
+    // 달력에 뿌릴 42칸치 신규 등록.
+    // 여기만 groupBy 가 아닌 findMany 인 건 실수가 아니다 — createdAt 은 타임스탬프라
+    // groupBy(['createdAt']) 는 업체 하나당 한 행이 나와 집계가 안 되고, DB 쪽 날짜 절단은
+    // UTC 기준이라 KST 00~09시에 등록된 곳이 전부 하루 앞으로 밀린다. KST 하루로 묶으려면
+    // raw SQL 을 쓰거나 지금처럼 JS 에서 ymdKST 로 세는 수밖에 없다.
     prisma.contractedVendor.findMany({
       where: {
         createdAt: { gte: kstDayStartUTC(gridRange.start), lt: kstDayStartUTC(gridRange.endExclusive) },
@@ -328,7 +335,10 @@ export default async function ContractsPage({
   });
 
   // ── 달력 ──────────────────────────────────────────────────────────────────
+  // 칸에 찍는 숫자는 상태 구분 없는 하루 합계, 모달에 펼치는 건 상태별 내역.
+  // 같은 groupBy 결과를 두 가지로 접기만 하므로 쿼리는 하나면 된다.
   const calendarActivity = countsByMemoDate(monthActivityRows);
+  const calendarActivityByStatus = countsByDateAndStatus(monthActivityRows);
   const calendarNewVendors = countsByCreatedAtKST(monthNewRows);
 
   // ── 다가오는 미팅 ─────────────────────────────────────────────────────────
@@ -402,7 +412,7 @@ export default async function ContractsPage({
     <>
       <AdminHeader />
       <div className="min-h-screen" style={{ backgroundColor: 'var(--contracts-bg)' }}>
-        <main className="mx-auto w-full max-w-6xl px-4 py-6">
+        <main className="mx-auto w-full max-w-shell px-4 py-6">
           <div className="animate-fade-up mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold tracking-tight">
@@ -422,8 +432,9 @@ export default async function ContractsPage({
             </Link>
           </div>
 
-          {/* 왼쪽=하는 일, 오른쪽=날짜/상황 파악. 좁은 화면에서는 레일이 목록 아래로 내려간다. */}
-          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+          {/* 왼쪽=하는 일, 오른쪽=날짜/상황 파악. 좁은 화면에서는 레일이 목록 아래로 내려간다.
+              레일은 고정 폭이라 본문 폭을 넓히면 늘어난 만큼이 전부 왼쪽 목록으로 간다. */}
+          <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
             <div className="min-w-0">
               <ContractActivitySummary
                 yesterday={dayActivityOf(yesterday)}
@@ -516,7 +527,12 @@ export default async function ContractsPage({
                                   : `${formatTimeKST(m.createdAt)} 기록`}
                               </span>
                             </div>
-                            <p className="mt-2 text-[15px] leading-[1.7] whitespace-pre-wrap">{m.content}</p>
+                            {/* 폭을 넓히면 이 본문만 한 줄이 70자를 넘어가 읽기 나빠진다 —
+                                한글 45자쯤에서 끊는다. ch 단위는 라틴 "0" 글자폭 기준이라
+                                한글에서는 절반밖에 안 돼서 못 쓴다(em 으로 잡는다). */}
+                            <p className="mt-2 max-w-[46em] text-[15px] leading-[1.7] whitespace-pre-wrap">
+                              {m.content}
+                            </p>
                           </li>
                         );
                       })}
@@ -548,14 +564,18 @@ export default async function ContractsPage({
                     // 진행 상태 사이 눈이 한참을 건너가야 했다.
                     <div className="card-surface animate-fade-up overflow-hidden">
                       {/* table-fixed — auto 레이아웃이면 긴 주소 하나가 열 폭을 다 먹어
-                          업체명이 찌그러진다. 좁은 화면에서는 짓눌리는 대신 가로 스크롤. */}
-                      <Table className="table-fixed min-w-[640px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3">
+                          업체명이 찌그러진다. 좁은 화면에서는 짓눌리는 대신 가로 스크롤.
+                          min-w 가 820px 인 이유: 진행 상태 칸의 배지와 날짜는 둘 다 shrink-0
+                          이고 셀이 whitespace-nowrap 이라, 칸이 좁아지면 줄어드는 게 아니라
+                          옆 칸으로 삐져나온다. 이 폭이 안 삐져나오는 하한이다.
+                          퍼센트는 늘어난 폭이 주소(유일하게 잘리는 열)로 가도록 잡았다. */}
+                      <Table className="table-fixed min-w-[820px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3">
                         <TableHeader>
                           <TableRow className="[&_th]:text-xs [&_th]:font-semibold [&_th]:tracking-wide [&_th]:text-neutral-600">
-                            <TableHead style={{ width: '38%' }}>업체 · 주소</TableHead>
+                            <TableHead style={{ width: '42%' }}>업체 · 주소</TableHead>
                             <TableHead style={{ width: '17%' }}>전화번호</TableHead>
-                            <TableHead style={{ width: '12%' }}>DB담당자</TableHead>
-                            <TableHead style={{ width: '21%' }}>진행 상태</TableHead>
+                            <TableHead style={{ width: '10%' }}>DB담당자</TableHead>
+                            <TableHead style={{ width: '19%' }}>진행 상태</TableHead>
                             <TableHead style={{ width: '12%' }} className="text-right">
                               등록
                             </TableHead>
@@ -652,6 +672,7 @@ export default async function ContractsPage({
               <ContractCalendar
                 month={activeMonth}
                 activity={calendarActivity}
+                activityByStatus={calendarActivityByStatus}
                 newVendors={calendarNewVendors}
                 activeDate={activeDate}
                 today={today}

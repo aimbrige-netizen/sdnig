@@ -70,7 +70,9 @@ function MemoEntry({ memo, onDeleted }: { memo: ContractMemoDTO; onDeleted: (mem
           </button>
         </div>
       </div>
-      <p className="mt-2 text-sm whitespace-pre-wrap">{memo.content}</p>
+      {/* 한 줄이 너무 길어지지 않게 한글 45자쯤에서 끊는다 (목록 쪽 날짜 보기와 같은 규칙).
+          ch 는 라틴 글자폭 기준이라 한글에서는 절반밖에 안 돼 못 쓴다. */}
+      <p className="mt-2 max-w-[48em] text-sm whitespace-pre-wrap">{memo.content}</p>
     </li>
   );
 }
