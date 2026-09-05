@@ -10,9 +10,9 @@
 // "한계 대비 비율 하나" → 미터). 색은 계약 형태를 가르는 점(mark)과 경고 상태에만 쓰고,
 // 숫자·라벨은 항상 잉크 색을 유지합니다.
 //
-// 표면은 3단 단차를 씁니다 — 페이지 배경(--contracts-bg, 가장 짙음) → 카드(흰색) →
-// 배지/테이블 헤더 같은 인셋 요소(--contracts-inset). 순백 하나로 퉁치던 전 버전이
-// "밋밋하다"는 피드백을 받아 나눴습니다.
+// 표면은 딱 2단만 씁니다 — 페이지 배경(--contracts-bg) vs 흰 카드. 회색 톤을 여러 단계로
+// 잘게 나눴던 버전은 서로 너무 비슷해 오히려 산만하다는 피드백을 받고 걷어냈습니다 — 그
+// 외의 구분(배지, 테이블 헤더)은 색 대신 테두리·글자 굵기로 합니다.
 import Link from 'next/link';
 import type { Prisma } from '@prisma/client';
 import { AdminHeader } from '@/components/admin-header';
@@ -106,10 +106,7 @@ function StatusBadge({ status, lastMemoAt }: { status: string | null; lastMemoAt
   const dot = status ? contractStatusDot(status) : 'var(--muted-foreground)';
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span
-        className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-neutral-700"
-        style={{ backgroundColor: 'var(--contracts-inset)' }}
-      >
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
         <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: dot }} />
         {label}
       </span>
@@ -358,10 +355,7 @@ export default async function ContractsPage({
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
-                          style={{ backgroundColor: 'var(--contracts-inset)' }}
-                        >
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
                           <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: contractStatusDot(m.status) }} />
                           {contractStatusLabel(m.status)}
                         </span>
@@ -396,7 +390,7 @@ export default async function ContractsPage({
               <div className="card-surface animate-fade-up overflow-hidden" style={{ animationDelay: '160ms' }}>
                 <Table>
                   <TableHeader>
-                    <TableRow style={{ backgroundColor: 'var(--contracts-inset)' }}>
+                    <TableRow className="[&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-muted-foreground">
                       <TableHead>업체명</TableHead>
                       <TableHead>계약 형태</TableHead>
                       <TableHead>전화번호</TableHead>
@@ -415,10 +409,7 @@ export default async function ContractsPage({
                         <ContractRow
                           key={v.id}
                           id={v.id}
-                          style={{
-                            animationDelay: `${180 + Math.min(i, 14) * 25}ms`,
-                            backgroundColor: i % 2 === 1 ? 'oklch(0.98 0.003 264)' : undefined,
-                          }}
+                          style={{ animationDelay: `${180 + Math.min(i, 14) * 25}ms` }}
                         >
                           <TableCell>
                             {/* 실제 링크 — 키보드로 Tab+Enter 접근이 되고, 클릭도 이 앵커가 그대로 처리한다
@@ -434,10 +425,7 @@ export default async function ContractsPage({
                             </Link>
                           </TableCell>
                           <TableCell>
-                            <span
-                              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs text-neutral-700"
-                              style={{ backgroundColor: 'var(--contracts-inset)' }}
-                            >
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
                               <span
                                 aria-hidden
                                 className="h-1.5 w-1.5 rounded-full"

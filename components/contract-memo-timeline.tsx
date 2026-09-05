@@ -13,15 +13,7 @@ interface ContractMemoTimelineProps {
   onDeleted: (memoId: number) => void;
 }
 
-function MemoEntry({
-  memo,
-  onDeleted,
-  isLast,
-}: {
-  memo: ContractMemoDTO;
-  onDeleted: (memoId: number) => void;
-  isLast: boolean;
-}) {
+function MemoEntry({ memo, onDeleted }: { memo: ContractMemoDTO; onDeleted: (memoId: number) => void }) {
   const [deleting, setDeleting] = useState(false);
   // 방금 낙관적으로 얹힌, 서버가 아직 확정하지 않은 메모(임시 음수 id — contract-memo-composer.tsx
   // 참고). 이 상태에서 삭제를 누르면 deleteContractMemo 가 "존재하지 않는 메모"로 거부해 사용자만
@@ -48,50 +40,37 @@ function MemoEntry({
   }
 
   return (
-    // 상태색 점 + 이어지는 세로선으로 "쌓여가는 기록"을 실제 타임라인 모양으로 보여준다.
-    // 마지막 항목은 선을 그리지 않는다(더 이어질 게 없으므로).
-    <li className="animate-fade-up grid grid-cols-[22px_1fr] gap-4 px-5">
-      <div className="flex flex-col items-center">
-        <span
-          aria-hidden
-          className="mt-1 size-3 shrink-0 rounded-full ring-4 ring-white"
-          style={{ backgroundColor: contractStatusDot(memo.status) }}
-        />
-        {!isLast && <span aria-hidden className="mt-1 w-0.5 flex-1 bg-black/[0.08]" />}
-      </div>
-      <div className={isLast ? 'pb-5' : 'pb-6'}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
+    // 상태 배지 + 날짜 + 내용을 한 세로 열에 모아 위아래로 훑어 읽기 쉽게 한다
+    // (세로선으로 잇는 타임라인 모양은 스캔하기 불편하다는 피드백을 받고 걷어냈다).
+    <li className="animate-fade-up border-b border-black/[0.06] px-5 py-4 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
             <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium text-neutral-700"
-              style={{ backgroundColor: 'var(--contracts-inset)' }}
-            >
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: contractStatusDot(memo.status) }}
-              />
-              {contractStatusLabel(memo.status)}
-            </span>
-            <span className="text-xs text-muted-foreground tabular-nums">{formatDateKST(memo.memoDate)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-neutral-400 tabular-nums">
-              {pending ? '저장 중...' : `${formatDateTimeKST(memo.createdAt)} 기록`}
-            </span>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting || pending}
-              aria-label={`${contractStatusLabel(memo.status)} · ${formatDateKST(memo.memoDate)} 메모 삭제`}
-              className="grid size-6 place-items-center rounded text-neutral-400 transition-colors hover:bg-neutral-900/5 hover:text-destructive disabled:opacity-50"
-            >
-              ×
-            </button>
-          </div>
+              aria-hidden
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: contractStatusDot(memo.status) }}
+            />
+            {contractStatusLabel(memo.status)}
+          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{formatDateKST(memo.memoDate)}</span>
         </div>
-        <p className="mt-2 text-sm whitespace-pre-wrap">{memo.content}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-neutral-400 tabular-nums">
+            {pending ? '저장 중...' : `${formatDateTimeKST(memo.createdAt)} 기록`}
+          </span>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting || pending}
+            aria-label={`${contractStatusLabel(memo.status)} · ${formatDateKST(memo.memoDate)} 메모 삭제`}
+            className="grid size-6 place-items-center rounded text-neutral-400 transition-colors hover:bg-neutral-900/5 hover:text-destructive disabled:opacity-50"
+          >
+            ×
+          </button>
+        </div>
       </div>
+      <p className="mt-2 text-sm whitespace-pre-wrap">{memo.content}</p>
     </li>
   );
 }
@@ -108,15 +87,12 @@ export function ContractMemoTimeline({ memos, onDeleted }: ContractMemoTimelineP
 
   return (
     <section className="card-surface animate-fade-up overflow-hidden">
-      <h2
-        className="border-b border-black/[0.06] px-5 py-3 text-sm font-semibold"
-        style={{ backgroundColor: 'var(--contracts-inset)' }}
-      >
+      <h2 className="border-b border-black/[0.06] px-5 py-3 text-sm font-semibold">
         진행 메모 <span className="ml-1 font-normal text-muted-foreground">{memos.length}건</span>
       </h2>
-      <ul className="pt-5">
-        {memos.map((memo, i) => (
-          <MemoEntry key={memo.id} memo={memo} onDeleted={onDeleted} isLast={i === memos.length - 1} />
+      <ul>
+        {memos.map((memo) => (
+          <MemoEntry key={memo.id} memo={memo} onDeleted={onDeleted} />
         ))}
       </ul>
     </section>
