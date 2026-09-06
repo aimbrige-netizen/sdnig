@@ -21,11 +21,88 @@ import {
   buildMonthGrid,
   formatMonthLabel,
 } from "@/lib/contract-activity";
+import { formatDayHeadingKST } from "@/lib/format-date";
 import { DayStatusGrid, statusTotal } from "./contract-day-stats";
 import { CONTRACT_RESULT_STATUSES } from "@/lib/contract-constants";
 import { cn } from "@/lib/utils";
 
 const WEEKDAY_HEADS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+export interface ManagerRow {
+  name: string;
+  counts: Record<string, number>;
+}
+
+/** 담당자별 실적 표 — 달 합계와 "고른 날" 합계가 같은 모양을 쓴다.
+ *
+ *  점 색으로만 구분하던 걸 걷어내고 글자 머리말을 단 표로 바꿨고, 그마저 작아서 안 보인다는
+ *  피드백을 받아 글자와 줄 높이를 키웠다(이름 14px, 숫자 16px). 색은 본문 이정표 열과 같은
+ *  값을 그대로 써서 거들기만 한다 — 색을 못 봐도 표가 그대로 읽힌다. */
+function ManagerTable({
+  rows,
+  caption,
+}: {
+  rows: ManagerRow[];
+  caption: string;
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="py-2 text-[13px] text-neutral-600">
+        미팅완료·계약완료 기록이 없습니다.
+      </p>
+    );
+  }
+  return (
+    <table className="w-full">
+      {/* 한 화면에 표가 여럿이라 각자 이름을 갖고 있어야 스크린리더에서
+          "미팅완료" 머리말이 어느 표의 것인지 구분된다 */}
+      <caption className="sr-only">{caption}</caption>
+      <thead>
+        <tr className="border-b border-black/[0.08] text-xs text-neutral-600">
+          <th className="pb-1.5 text-left font-medium">담당자</th>
+          {CONTRACT_RESULT_STATUSES.map((st) => (
+            <th
+              key={st.code}
+              className="w-[4.75rem] pb-1.5 text-right font-medium"
+            >
+              {st.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((m) => (
+          <tr
+            key={m.name}
+            className="border-b border-black/[0.05] last:border-b-0"
+          >
+            <td className="max-w-0 truncate py-2 pr-2 text-sm" title={m.name}>
+              {m.name}
+            </td>
+            {CONTRACT_RESULT_STATUSES.map((st) => {
+              const n = m.counts[st.code] ?? 0;
+              return (
+                <td key={st.code} className="py-2 text-right tabular-nums">
+                  <span
+                    className={
+                      n === 0
+                        ? "text-[15px] text-neutral-300"
+                        : "text-base font-semibold"
+                    }
+                    style={n === 0 ? undefined : { color: st.colorVar }}
+                  >
+                    {n}
+                  </span>
+                  <span className="sr-only"> {st.label}</span>
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 interface ContractCalendarProps {
   /** 펼쳐 보여줄 달 (YYYY-MM) */
@@ -40,7 +117,15 @@ interface ContractCalendarProps {
   plans: Record<string, number>;
   /** 담당자별 이 달 실적 — 미팅완료·계약완료 두 가지만.
    *  상태 코드를 키로 잡아 CONTRACT_RESULT_STATUSES 와 나란히 읽는다. */
-  byManager: { name: string; counts: Record<string, number> }[];
+  byManager: ManagerRow[];
+  /** 날짜를 고른 경우 그 날치 합계. 안 골랐으면 null 이라 달 합계만 뜬다. */
+  daySummary: {
+    date: string;
+    byStatus: Record<string, number>;
+    newVendors: number;
+    plans: number;
+    byManager: ManagerRow[];
+  } | null;
   /** 현재 보고 있는 날짜 (없으면 '') */
   activeDate: string;
   /** 서버가 계산한 KST 오늘 — 클라이언트 시계를 쓰면 하이드레이션이 어긋난다 */
@@ -55,6 +140,7 @@ export function ContractCalendar({
   newVendors,
   plans,
   byManager,
+  daySummary,
   activeDate,
   today,
   query,
@@ -222,12 +308,41 @@ export function ContractCalendar({
         </span>
       </p>
 
+      {/* 고른 날 합계 — 달력에서 날짜를 누르면 그 날치가 달 합계 위에 먼저 뜬다.
+          "9월 합계 말고 그날 합계도" 라는 요청. 둘을 같은 모양으로 그려 눈이 옮겨가기 쉽게 한다. */}
+      {daySummary && (
+        <div className="mt-3 border-t border-black/[0.06] pt-3">
+          <h3 className="mb-2 text-sm font-semibold">
+            {formatDayHeadingKST(daySummary.date)} 합계{" "}
+            <span className="text-xs font-normal text-neutral-600 tabular-nums">
+              메모 {statusTotal(daySummary.byStatus)}건 · 신규{" "}
+              {daySummary.newVendors}곳
+              {daySummary.plans > 0 && ` · 예정 ${daySummary.plans}건`}
+            </span>
+          </h3>
+          <DayStatusGrid
+            byStatus={daySummary.byStatus}
+            newVendors={daySummary.newVendors}
+            className="grid-cols-3"
+            size="sm"
+          />
+          <h4 className="mt-3 mb-1.5 text-xs font-semibold text-neutral-700">
+            담당자별{" "}
+            <span className="font-normal text-neutral-600">이 날 실적</span>
+          </h4>
+          <ManagerTable
+            rows={daySummary.byManager}
+            caption={`${formatDayHeadingKST(daySummary.date)} 담당자별 실적 (미팅완료·계약완료 건수)`}
+          />
+        </div>
+      )}
+
       {/* 이 달 합계 — 날짜를 하나씩 눌러보지 않아도 "이번 달 미팅 몇 건 했나"가 바로 보인다 */}
       <div className="mt-3 border-t border-black/[0.06] pt-3">
         {/* 바로 위 카드 머리말이 "2026년 9월"이라 여기서 연도를 되풀이하지 않는다 */}
-        <h3 className="mb-2 text-xs font-semibold text-neutral-700">
+        <h3 className="mb-2 text-sm font-semibold">
           {Number(month.slice(5))}월 합계{" "}
-          <span className="font-normal text-neutral-600 tabular-nums">
+          <span className="text-xs font-normal text-neutral-600 tabular-nums">
             메모 {statusTotal(monthTotals)}건 · 신규 {monthNew}곳
             {monthPlans > 0 && ` · 연락 예정 ${monthPlans}건`}
           </span>
@@ -238,74 +353,16 @@ export function ContractCalendar({
           className="grid-cols-3"
           size="sm"
         />
-      </div>
-
-      {/* 담당자별 — 같은 달을 누가 얼마나 움직였나.
-          미팅완료·계약완료 둘만 센다. 다섯 단계를 작은 점 색으로만 구분해 늘어놨더니
-          어느 칸이 어느 상태인지 못 읽겠다는 피드백을 받고 줄였다. 지금은 색이 아니라
-          글자 머리말이 뜻을 지고, 색은 본문 표(이정표 열)와 같은 값을 그대로 써서
-          거들기만 한다 — 색을 못 봐도 표가 그대로 읽힌다. */}
-      <div className="mt-3 border-t border-black/[0.06] pt-3">
-        <h3 className="mb-1.5 text-xs font-semibold text-neutral-700">
-          담당자별 {Number(month.slice(5))}월 실적{" "}
-          <span className="font-normal text-neutral-600">맡은 업체 기준</span>
-        </h3>
-        {/* 비어 있어도 칸 자체는 남긴다 — 통째로 사라지면 고장 난 줄 안다 */}
-        {byManager.length === 0 ? (
-          <p className="py-2 text-xs text-neutral-600">
-            이 달에는 미팅완료·계약완료 기록이 없습니다.
-          </p>
-        ) : (
-          <table className="w-full text-[13px]">
-            {/* 한 화면에 표가 둘(업체 목록 + 이 표)이라 각자 이름을 갖고 있어야
-                스크린리더에서 "미팅완료" 머리말이 어느 표의 것인지 구분된다 */}
-            <caption className="sr-only">담당자별 {Number(month.slice(5))}월 실적 (미팅완료·계약완료 건수)</caption>
-            <thead>
-              <tr className="border-b border-black/[0.06] text-xs text-neutral-600">
-                <th className="pb-1 text-left font-medium">담당자</th>
-                {CONTRACT_RESULT_STATUSES.map((st) => (
-                  <th
-                    key={st.code}
-                    className="w-[4.5rem] pb-1 text-right font-medium"
-                  >
-                    {st.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {byManager.map((m) => (
-                <tr
-                  key={m.name}
-                  className="border-b border-black/[0.04] last:border-b-0"
-                >
-                  <td className="max-w-0 truncate py-1.5 pr-2" title={m.name}>
-                    {m.name}
-                  </td>
-                  {CONTRACT_RESULT_STATUSES.map((st) => {
-                    const n = m.counts[st.code] ?? 0;
-                    return (
-                      <td
-                        key={st.code}
-                        className="py-1.5 text-right tabular-nums"
-                      >
-                        <span
-                          className={
-                            n === 0 ? "text-neutral-300" : "font-semibold"
-                          }
-                          style={n === 0 ? undefined : { color: st.colorVar }}
-                        >
-                          {n}
-                        </span>
-                        <span className="sr-only"> {st.label}</span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <h4 className="mt-3 mb-1.5 text-xs font-semibold text-neutral-700">
+          담당자별{" "}
+          <span className="font-normal text-neutral-600">
+            이 달 실적 · 맡은 업체 기준
+          </span>
+        </h4>
+        <ManagerTable
+          rows={byManager}
+          caption={`담당자별 ${Number(month.slice(5))}월 실적 (미팅완료·계약완료 건수)`}
+        />
       </div>
     </section>
   );
