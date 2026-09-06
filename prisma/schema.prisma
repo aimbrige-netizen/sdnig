@@ -32,13 +32,22 @@ model ContractMemo {
   contractedVendorId Int
   contractedVendor   ContractedVendor @relation(fields: [contractedVendorId], references: [id], onDelete: Cascade)
   status             String // recontact(재컨텍요망) | longterm(장기가망) | scheduled(미팅예정) | consulted(미팅완료) | contracted(계약완료)
-  memoDate           DateTime         @db.Date // 미팅한(또는 미팅할) 날 — 사용자가 고르는 값. 시간 없이 날짜만
   content            String           @db.Text
-  createdAt          DateTime         @default(now()) // 실제로 기록한 시각. memoDate 와 다를 수 있다(지난 일을 나중에 적는 경우)
+  /// 이 메모를 남긴 시각 = "그 날 한 일"의 날짜. 달력·어제/오늘 요약·날짜 보기가 전부 이 값을 KST 하루로 잘라 쓴다.
+  createdAt          DateTime         @default(now())
+  /// 다음에 언제 연락할지 — 선택 입력이라 대개 비어 있다. 앞으로 할 일이지 지나간 활동이 아니므로
+  /// 활동 집계에는 절대 섞지 않는다(레일의 "다음 연락 예정"과 달력의 예정 표시에만 쓴다).
+  nextContactAt      DateTime?        @db.Date
+  /// @deprecated 예전엔 메모마다 사용자가 고르던 날짜. "언제 했다"(과거)와 "언제 할 거다"(미래)를
+  /// 한 칸이 겸하는 바람에 달력이 앞으로 할 일까지 활동으로 세고 있었다. 지금은 활동=createdAt,
+  /// 예정=nextContactAt 으로 나뉘었고 이 컬럼은 앱 어디서도 읽지 않는다.
+  /// 운영 DB에 백업이 없어 과거 기록의 원본으로 남겨둔다. 스키마에서 빼면 migrate 가 DROP 을 만든다.
+  memoDate           DateTime?        @db.Date
 
   @@index([contractedVendorId, createdAt])
-  // 목록 화면의 캘린더·활동 요약·날짜 보기가 전부 memoDate 로 훑는다(달력 한 장 = 42일치).
-  @@index([memoDate])
+  // 달력 한 장 = 42일치를 createdAt 범위로 훑는다. 위 복합 인덱스는 선행 컬럼이 달라 못 쓴다.
+  @@index([createdAt])
+  @@index([nextContactAt])
   @@map("contract_memos")
 }
 

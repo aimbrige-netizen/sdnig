@@ -31,7 +31,7 @@ const FIELD_LABELS: Record<string, string> = {
   address: '주소',
   managerName: 'DB담당자',
   status: '진행 상태',
-  memoDate: '날짜',
+  nextContactAt: '다음 연락 예정일',
   content: '메모 내용',
 };
 
@@ -137,8 +137,10 @@ export async function createContractMemo(contractedVendorId: number, input: unkn
       data: {
         contractedVendorId,
         status: data.status,
-        memoDate: data.memoDate,
         content: data.content,
+        // 메모를 남긴 날짜는 createdAt 이 자동으로 맡는다. 여기서 물어보는 날짜는
+        // "다음에 언제 연락할지"뿐이고, 안 정했으면 비워둔다.
+        nextContactAt: data.nextContactAt,
       },
     });
   } catch (e) {

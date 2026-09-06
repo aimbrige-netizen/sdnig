@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { deleteContractMemo } from '@/app/contracts/actions';
 import { contractStatusDot, contractStatusLabel } from '@/lib/contract-constants';
-import { formatDateKST, formatDateTimeKST } from '@/lib/format-date';
+import { formatDateKST, formatDateTimeKST, relativeDayKST, todayKST } from '@/lib/format-date';
 import type { ContractMemoDTO } from './contract-detail-view';
 
 interface ContractMemoTimelineProps {
@@ -19,10 +19,14 @@ function MemoEntry({ memo, onDeleted }: { memo: ContractMemoDTO; onDeleted: (mem
   // 참고). 이 상태에서 삭제를 누르면 deleteContractMemo 가 "존재하지 않는 메모"로 거부해 사용자만
   // 당황하므로, 서버 확정 전까지는 삭제 버튼을 잠가둔다.
   const pending = memo.id < 0;
+  // 예정일이 오늘보다 앞이면 이미 지난 약속. KST 달력 날짜끼리 문자열로 비교한다 —
+  // new Date().setHours(0,0,0,0) 은 브라우저 로컬 자정이라 해외에서 열면 하루가 어긋난다.
+  // (nextContactAt 은 @db.Date 라 항상 UTC 자정 ISO 로 와서 앞 10글자가 곧 그 날짜다.)
+  const overdue = !!memo.nextContactAt && memo.nextContactAt.slice(0, 10) < todayKST();
 
   async function handleDelete() {
     if (deleting || pending) return;
-    const label = `${contractStatusLabel(memo.status)} · ${formatDateKST(memo.memoDate)}`;
+    const label = `${contractStatusLabel(memo.status)} · ${formatDateTimeKST(memo.createdAt)}`;
     if (!window.confirm(`'${label}' 메모를 삭제할까요? 되돌릴 수 없습니다.`)) return;
     setDeleting(true);
     try {
@@ -53,18 +57,30 @@ function MemoEntry({ memo, onDeleted }: { memo: ContractMemoDTO; onDeleted: (mem
             />
             {contractStatusLabel(memo.status)}
           </span>
-          <span className="text-xs text-muted-foreground tabular-nums">{formatDateKST(memo.memoDate)}</span>
+          {/* 다음 연락 예정일은 정해뒀을 때만 나온다. 지난 날짜면 경고색으로 — 놓친 약속이다. */}
+          {memo.nextContactAt && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums"
+              style={{
+                color: overdue ? 'var(--data-warning-ink)' : 'var(--brand-to)',
+                borderColor: 'currentColor',
+              }}
+              title={`다음 연락 예정 ${formatDateKST(memo.nextContactAt)}`}
+            >
+              {overdue ? '연락 예정 지남' : '다음 연락'} {relativeDayKST(memo.nextContactAt)}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-neutral-400 tabular-nums">
+          <span className="text-xs text-neutral-600 tabular-nums">
             {pending ? '저장 중...' : `${formatDateTimeKST(memo.createdAt)} 기록`}
           </span>
           <button
             type="button"
             onClick={handleDelete}
             disabled={deleting || pending}
-            aria-label={`${contractStatusLabel(memo.status)} · ${formatDateKST(memo.memoDate)} 메모 삭제`}
-            className="grid size-6 place-items-center rounded text-neutral-400 transition-colors hover:bg-neutral-900/5 hover:text-destructive disabled:opacity-50"
+            aria-label={`${contractStatusLabel(memo.status)} · ${formatDateTimeKST(memo.createdAt)} 메모 삭제`}
+            className="grid size-6 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-destructive disabled:opacity-50"
           >
             ×
           </button>

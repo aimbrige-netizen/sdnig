@@ -10,10 +10,11 @@
 // 상태(재컨텍요망/장기가망/미팅예정/미팅완료/계약완료)가 그 업체의 "현재 상태"입니다.
 // 아직 메모를 하나도 안 남긴 곳은 "미분류"로 둡니다.
 //
-// ⚠️ 날짜 컬럼 두 종류를 절대 섞지 마세요 (lib/format-date.ts 머리말 참고):
-//   - ContractMemo.memoDate 는 @db.Date → dateOnlyUTC()
-//   - createdAt 은 타임스탬프        → kstDayStartUTC()
-// 바꿔 쓰면 결과가 정확히 하루씩 밀립니다.
+// ⚠️ 날짜 두 종류를 절대 섞지 마세요 — 뜻이 정반대입니다 (lib/format-date.ts 머리말 참고):
+//   - createdAt(타임스탬프)   = "언제 했다". 활동 = 전부 이 값. KST 하루 경계는 kstDayStartUTC()
+//   - nextContactAt(@db.Date) = "언제 할 거다". 앞으로 할 일이라 활동 집계에 절대 넣지 않음
+//     (선택 입력이라 대개 비어 있습니다). 그 날을 가리키는 Date 는 dateOnlyUTC()
+// 예전엔 이 둘을 memoDate 한 칸이 겸해서, 아직 하지도 않은 미팅이 활동 건수에 섞였습니다.
 //
 // 표면은 딱 2단만 씁니다 — 페이지 배경(--contracts-bg) vs 흰 카드. 회색 톤을 여러 단계로
 // 잘게 나눴던 버전은 서로 너무 비슷해 오히려 산만하다는 피드백을 받고 걷어냈습니다.
@@ -50,12 +51,11 @@ import {
   kstDayStartUTC,
   relativeDayKST,
   todayKST,
-  ymdKST,
 } from '@/lib/format-date';
 import {
+  countsByCreatedAtAndStatus,
   countsByCreatedAtKST,
-  countsByDateAndStatus,
-  countsByMemoDate,
+  countsByDateOnly,
   monthGridRange,
   monthOf,
   parseMonthParam,
@@ -69,7 +69,7 @@ const nf = new Intl.NumberFormat('ko-KR');
 /** 한 화면에 그리는 최대 행 수 — 넘치면 잘렸다는 사실을 화면에 명시한다 (조용한 절삭 금지) */
 const MAX_ROWS = 500;
 
-/** 레일의 "다가오는 미팅"에 한 번에 보여줄 개수 */
+/** 레일의 "다음 연락 예정"에 한 번에 보여줄 개수 */
 const UPCOMING_LIMIT = 5;
 
 /** 메모를 하나도 안 남긴 업체의 상태 코드 — CONTRACT_STATUSES 에는 없는, 화면 전용 값 */
@@ -114,7 +114,7 @@ function RailStat({ label, value, dot, tone }: { label: string; value: number; d
   );
 }
 
-/** 진행 상태 배지 — 점 + 라벨 + (있으면) 그 상태로 남긴 최근 메모의 날짜.
+/** 진행 상태 배지 — 점 + 라벨 + (있으면) 그 상태를 남긴 최근 메모의 작성일.
  *  날짜는 "오늘/어제/3일 전"처럼 읽어서 바로 감이 오게 쓴다. 예전엔 2026.09.04 를
  *  neutral-400 · 12px 로 흘려 썼는데, 대비가 2.5:1 밖에 안 나와 안 보인다는 지적을 받았다.
  *  미분류는 중립 회색으로 다른 뜻(위험/경고)처럼 보이지 않게 한다. */
@@ -243,7 +243,7 @@ export default async function ContractsPage({
     dayNewRows,
     monthActivityRows,
     monthNewRows,
-    scheduledRows,
+    plannedRows,
   ] = await Promise.all([
     // 업체 명단 — 날짜 보기에서는 안 쓴다
     activeDate
@@ -258,10 +258,12 @@ export default async function ContractsPage({
     prisma.contractedVendor.count({ where: { AND: [scopeWhere, INCOMPLETE_WHERE] } }),
     // 날짜 보기 — 계약 형태/진행 상태/검색어/정렬과는 독립된 별도 보기라 그 필터들과
     // 조합하지 않는다(ContractListControls 쪽에서 이 필터들을 조작하면 date 를 함께 지운다).
-    // memoDate(실제 업무/미팅 날짜) 기준으로 모으되, 각 행에 기록 시각(createdAt)도 함께 보여준다.
+    // 그 날 "남긴" 메모를 모은다 — 경계는 KST 하루(= 전날 15:00Z ~ 그 날 15:00Z).
     activeDate
       ? prisma.contractMemo.findMany({
-          where: { memoDate: dateOnlyUTC(activeDate) },
+          where: {
+            createdAt: { gte: kstDayStartUTC(activeDate), lt: kstDayStartUTC(addDaysYmd(activeDate, 1)) },
+          },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           include: { contractedVendor: { select: { id: true, name: true } } },
         })
@@ -274,25 +276,25 @@ export default async function ContractsPage({
           select: { id: true, name: true, createdAt: true },
         })
       : Promise.resolve([]),
-    // 어제·오늘 활동 (상태별)
-    prisma.contractMemo.groupBy({
-      by: ['memoDate', 'status'],
-      where: { memoDate: { in: [dateOnlyUTC(yesterday), dateOnlyUTC(today)] } },
-      _count: { _all: true },
+    // 어제·오늘 활동 (상태별). groupBy 를 못 쓰는 이유는 countsByCreatedAtAndStatus 주석 참고 —
+    // createdAt 은 타임스탬프라 DB 에서 KST 하루로 묶을 방법이 없다. 이틀치라 행도 얼마 안 된다.
+    prisma.contractMemo.findMany({
+      where: { createdAt: { gte: kstDayStartUTC(yesterday), lt: kstDayStartUTC(addDaysYmd(today, 1)) } },
+      select: { createdAt: true, status: true },
     }),
     // 어제·오늘 신규 등록 — createdAt 은 타임스탬프라 KST 하루 경계로 잘라야 한다
     prisma.contractedVendor.findMany({
       where: { createdAt: { gte: kstDayStartUTC(yesterday), lt: kstDayStartUTC(addDaysYmd(today, 1)) } },
       select: { createdAt: true },
     }),
-    // 달력에 뿌릴 42칸치 메모 건수 — 상태까지 쪼개서 가져온다(날짜 모달이 상태별로 펼친다).
-    // 최악이라도 42일 × 상태 5개 = 210행이라 그냥 한 번에 받는다.
-    // ⚠️ 양쪽 경계 모두 dateOnlyUTC — 한쪽이라도 kstDayStartUTC 로 바꾸면 창이 9시간 밀려
-    //    첫 칸이 빠지고 화면에 없는 43일째가 딸려 들어온다.
-    prisma.contractMemo.groupBy({
-      by: ['memoDate', 'status'],
-      where: { memoDate: { gte: dateOnlyUTC(gridRange.start), lt: dateOnlyUTC(gridRange.endExclusive) } },
-      _count: { _all: true },
+    // 달력에 뿌릴 42칸치 메모 — 상태까지 함께 받아 칸 숫자와 모달 내역을 한 번에 만든다.
+    // ⚠️ 양쪽 경계 모두 kstDayStartUTC — 한쪽만 바꾸면 창이 9시간 밀려 첫 칸이 빠지고
+    //    화면에 없는 43일째가 딸려 들어온다.
+    prisma.contractMemo.findMany({
+      where: {
+        createdAt: { gte: kstDayStartUTC(gridRange.start), lt: kstDayStartUTC(gridRange.endExclusive) },
+      },
+      select: { createdAt: true, status: true },
     }),
     // 달력에 뿌릴 42칸치 신규 등록.
     // 여기만 groupBy 가 아닌 findMany 인 건 실수가 아니다 — createdAt 은 타임스탬프라
@@ -305,15 +307,17 @@ export default async function ContractsPage({
       },
       select: { createdAt: true },
     }),
-    // "미팅예정" 메모 전체 — 이 중 아직 그 업체의 **최신** 메모인 것만 진짜 예정이다.
-    // (뒤에 미팅완료 메모가 붙었으면 이미 끝난 약속이다.) 최신 여부는 Prisma where 로
-    // 표현할 수 없어 JS 에서 거른다. 내부 도구 규모라 전체를 들고 와도 부담이 없다.
+    // 다음 연락 예정일이 잡힌 메모 전체 — 이 중 아직 그 업체의 **최신** 메모인 것만 살아 있는
+    // 약속이다(뒤에 다른 메모가 붙었으면 이미 처리된 것). 최신 여부는 Prisma where 로 표현할
+    // 수 없어 JS 에서 거른다. 상태를 'scheduled' 로 좁히지 않는 이유: 재컨텍요망("3일 뒤 다시")
+    // 이나 장기가망("다음 달에")에도 예정일을 잡는 게 이 기능의 핵심이다.
     prisma.contractMemo.findMany({
-      where: { status: 'scheduled' },
-      orderBy: [{ memoDate: 'asc' }, { id: 'asc' }],
+      where: { nextContactAt: { not: null } },
+      orderBy: [{ nextContactAt: 'asc' }, { id: 'asc' }],
       select: {
         id: true,
-        memoDate: true,
+        status: true,
+        nextContactAt: true,
         contractedVendor: {
           select: {
             id: true,
@@ -326,7 +330,7 @@ export default async function ContractsPage({
   ]);
 
   // ── 활동 요약 (어제 / 오늘) ────────────────────────────────────────────────
-  const dayStatus = countsByDateAndStatus(dayStatusRows);
+  const dayStatus = countsByCreatedAtAndStatus(dayStatusRows);
   const dayNew = countsByCreatedAtKST(dayNewRows);
   const dayActivityOf = (ymd: string): DayActivity => ({
     date: ymd,
@@ -336,24 +340,26 @@ export default async function ContractsPage({
 
   // ── 달력 ──────────────────────────────────────────────────────────────────
   // 칸에 찍는 숫자는 상태 구분 없는 하루 합계, 모달에 펼치는 건 상태별 내역.
-  // 같은 groupBy 결과를 두 가지로 접기만 하므로 쿼리는 하나면 된다.
-  const calendarActivity = countsByMemoDate(monthActivityRows);
-  const calendarActivityByStatus = countsByDateAndStatus(monthActivityRows);
+  // 같은 행 묶음을 두 가지로 접기만 하므로 쿼리는 하나면 된다.
+  const calendarActivity = countsByCreatedAtKST(monthActivityRows);
+  const calendarActivityByStatus = countsByCreatedAtAndStatus(monthActivityRows);
   const calendarNewVendors = countsByCreatedAtKST(monthNewRows);
 
-  // ── 다가오는 미팅 ─────────────────────────────────────────────────────────
-  const liveScheduled = scheduledRows.filter((r) => r.contractedVendor.memos[0]?.id === r.id);
-  const todayDate = dateOnlyUTC(today);
-  const upcoming: UpcomingMeeting[] = liveScheduled
-    .filter((r) => r.memoDate >= todayDate)
+  // ── 다음 연락 예정 ────────────────────────────────────────────────────────
+  const livePlans = plannedRows.filter((r) => r.contractedVendor.memos[0]?.id === r.id);
+  const upcoming: UpcomingMeeting[] = livePlans
+    .filter((r) => r.nextContactAt!.toISOString().slice(0, 10) >= today)
     .slice(0, UPCOMING_LIMIT)
     .map((r) => ({
       memoId: r.id,
       vendorId: r.contractedVendor.id,
       vendorName: r.contractedVendor.name,
-      date: r.memoDate.toISOString().slice(0, 10),
+      status: r.status,
+      date: r.nextContactAt!.toISOString().slice(0, 10),
     }));
-  const overdueCount = liveScheduled.filter((r) => r.memoDate < todayDate).length;
+  const overdueCount = livePlans.filter((r) => r.nextContactAt!.toISOString().slice(0, 10) < today).length;
+  // 달력에 "이 날 연락 예정" 표시를 위해 — 활동(지나간 일)과 절대 합치지 않는다
+  const calendarPlans = countsByDateOnly(livePlans);
 
   // 각 칩 그룹의 "전체" 항목 — scopeTotal(검색어·정보미비만 반영) 을 그대로 쓰면 안 된다.
   // 다른 축(형태/상태)에 이미 필터가 걸려 있을 때, "전체"를 눌러도 실제로는 그 다른 축의
@@ -495,9 +501,6 @@ export default async function ContractsPage({
                   ) : (
                     <ul className="card-surface animate-fade-up divide-y divide-black/[0.06] overflow-hidden">
                       {dateMemos.map((m) => {
-                        // 지난 날짜의 일을 오늘 몰아 적은 경우 — 그 사실이 보여야 기록을 믿을 수 있다
-                        const loggedYmd = ymdKST(m.createdAt);
-                        const backdated = loggedYmd !== activeDate;
                         return (
                           <li key={m.id} className="px-5 py-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -517,14 +520,10 @@ export default async function ContractsPage({
                                   {m.contractedVendor.name}
                                 </Link>
                               </div>
-                              <span
-                                className="text-[13px] tabular-nums"
-                                style={{ color: backdated ? 'var(--data-warning-ink)' : undefined }}
-                                title={formatDateTimeKST(m.createdAt)}
-                              >
-                                {backdated
-                                  ? `${loggedYmd.slice(5).replace('-', '/')} ${formatTimeKST(m.createdAt)} 기록`
-                                  : `${formatTimeKST(m.createdAt)} 기록`}
+                              {/* 날짜가 이미 머리말에 있으니 여기는 시:분만 — 이 목록은 정의상
+                                  전부 같은 날에 남긴 메모다(작성 시각으로 모았다). */}
+                              <span className="text-[13px] text-neutral-600 tabular-nums" title={formatDateTimeKST(m.createdAt)}>
+                                {formatTimeKST(m.createdAt)} 기록
                               </span>
                             </div>
                             {/* 폭을 넓히면 이 본문만 한 줄이 70자를 넘어가 읽기 나빠진다 —
@@ -585,9 +584,8 @@ export default async function ContractsPage({
                           {vendors.map((v) => {
                             const incomplete = isInfoIncomplete(v);
                             const latestStatus = v.memos[0]?.status ?? null;
-                            // memoDate(실제 업무 날짜)를 쓴다 — createdAt(기록한 시각)을 쓰면
-                            // 지난 날짜의 일을 오늘 적었을 때 "오늘 미팅한 것"처럼 보인다.
-                            const lastMemoDate = v.memos[0]?.memoDate ?? null;
+                            // 마지막으로 이 업체를 건드린 날 = 최신 메모를 남긴 날.
+                            const lastMemoDate = v.memos[0]?.createdAt ?? null;
                             return (
                               <ContractRow key={v.id} id={v.id}>
                                 <TableCell>
@@ -674,12 +672,13 @@ export default async function ContractsPage({
                 activity={calendarActivity}
                 activityByStatus={calendarActivityByStatus}
                 newVendors={calendarNewVendors}
+                plans={calendarPlans}
                 activeDate={activeDate}
                 today={today}
                 query={query}
               />
 
-              <ContractUpcomingMeetings items={upcoming} overdueCount={overdueCount} query={query} />
+              <ContractUpcomingMeetings items={upcoming} overdueCount={overdueCount} />
 
               <section className="card-surface px-4 py-3">
                 <h2 className="mb-1 text-sm font-semibold">명단 현황</h2>

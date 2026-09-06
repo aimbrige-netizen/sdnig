@@ -31,7 +31,7 @@ export default async function NewVendorPage({
     const { sido, gugun } = parseRegionFromAddress(contract.address);
     // 참고용으로만 보여주는 메모 — 최신 순으로 한 줄씩 나열한다 (폼에는 저장되지 않는다)
     const memoLines = contract.memos.map(
-      (m) => `[${contractStatusLabel(m.status)} · ${formatDateKST(m.memoDate)}] ${m.content}`
+      (m) => `[${contractStatusLabel(m.status)} · ${formatDateKST(m.createdAt)}] ${m.content}`
     );
     prefill = {
       name: contract.name,
