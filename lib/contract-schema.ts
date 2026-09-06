@@ -27,7 +27,7 @@ export const contractPayloadSchema = z
     }),
     phone: optionalText(30),
     address: optionalText(200),
-    managerName: z.string().trim().min(1, 'DB담당자를 입력해주세요').max(50, '50자 이내로 입력해주세요'),
+    managerName: z.string().trim().min(1, 'DB담당자를 선택해주세요').max(50, '50자 이내로 입력해주세요'),
   })
   .strict();
 

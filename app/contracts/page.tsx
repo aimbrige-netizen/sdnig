@@ -38,6 +38,7 @@ import {
   CONTRACT_RESULT_STATUSES,
   CONTRACT_STATUSES,
   CONTRACT_TYPES,
+  DB_MANAGERS,
   contractStatusDot,
   contractStatusLabel,
   contractTypeDot,
@@ -431,7 +432,9 @@ export default async function ContractsPage({
 
   // ── 담당자별 (이 달) ──────────────────────────────────────────────────────
   // 격자에는 앞뒤 달 날짜가 늘 섞여 있으므로 반드시 이 달 것만 골라 센다 — 월 합계와 같은 규칙.
-  const managerBuckets = new Map<string, Record<string, number>>();
+  // 명단에 있는 사람은 실적이 0이어도 자리를 지킨다 — "아무것도 안 한 사람"이 목록에서
+  // 사라져 버리면 그 사실 자체가 안 보인다.
+  const managerBuckets = new Map<string, Record<string, number>>(DB_MANAGERS.map((m) => [m, {}]));
   for (const r of monthActivityRows) {
     if (ymdKST(r.createdAt).slice(0, 7) !== activeMonth) continue;
     if (!RESULT_CODES.has(r.status)) continue; // 미팅완료·계약완료만 실적으로 센다
