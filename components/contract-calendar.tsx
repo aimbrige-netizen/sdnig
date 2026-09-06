@@ -1,5 +1,3 @@
-'use client';
-
 // 오른쪽 레일의 월 캘린더 — "어제 미팅 몇 건 했나"를 달력 위에서 바로 훑기 위한 것.
 //
 // 칸 안에는 숫자를 하나만 둔다(그 날 남긴 메모 건수). 등록/미팅을 둘 다 숫자로 넣으면
@@ -10,31 +8,17 @@
 // 이 숫자에 안 섞고 파란 점으로 따로 표시한다 — 예전엔 한 칸이 둘을 겸해서 아직 하지도
 // 않은 미팅이 이번 달 활동 건수에 들어가 있었다.
 //
-// 날짜를 누르면 상태별 건수(재컨텍요망/장기가망/미팅예정/미팅완료/계약완료 + 신규 등록)를
-// 모달로 펼친다. 처음엔 모달 없이 곧장 ?date= 로 넘기게 만들었었는데, 그러면 상태별로
-// 몇 건인지 보려고 매번 페이지를 갈아끼워야 해서 달력을 훑을 수가 없다는 피드백을 받았다.
+// 날짜를 누르면 왼쪽이 그 날 기록으로 바뀐다(?date=). 한동안 모달로 상태별 건수를 먼저
+// 펼쳐 보여줬는데, 결국 그 날 뭘 했는지는 왼쪽 목록을 봐야 알 수 있어서 클릭 한 번이
+// 더 드는 셈이었다 — 모달을 걷어내고 곧장 목록으로 간다. 상태별 건수는 그 목록 머리말에
+// 그대로 있고, 이 카드 아래에는 달 전체 합계와 담당자별 집계가 있다.
 //
-// 그래도 칸은 여전히 진짜 <Link href="?date=..."> 다. 그래야
-//   - ⌘/Ctrl/가운데 클릭으로 그 날 기록을 새 탭에 띄울 수 있고,
-//   - 주소를 복사해 남에게 보낼 수 있고,
-//   - JS 가 죽어도 최소한 동작한다.
-// 평범한 왼쪽 클릭만 가로채 모달을 띄우고, 모달 안의 "이 날 기록 보기"가 실제 이동을 한다.
-import { useState } from 'react';
+// 상태를 안 들고 있어 서버 컴포넌트다(칸 42개가 전부 <Link>).
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { buildContractsUrl, type ContractQuery } from '@/lib/contract-query';
 import { addMonths, buildMonthGrid, formatMonthLabel } from '@/lib/contract-activity';
-import { formatDayHeadingKST, relativeDayKST } from '@/lib/format-date';
 import { DayStatusGrid, statusTotal } from './contract-day-stats';
+import { CONTRACT_STATUSES } from '@/lib/contract-constants';
 import { cn } from '@/lib/utils';
 
 const WEEKDAY_HEADS = ['일', '월', '화', '수', '목', '금', '토'] as const;
@@ -50,6 +34,8 @@ interface ContractCalendarProps {
   newVendors: Record<string, number>;
   /** 날짜(YYYY-MM-DD) → 그 날로 잡아둔 다음 연락 예정 건수 (앞으로 할 일) */
   plans: Record<string, number>;
+  /** 담당자 → { 상태 코드 → 건수 } — 이 달에 그 담당자 업체에 달린 메모를 상태별로 센 것 */
+  byManager: { name: string; byStatus: Record<string, number>; total: number }[];
   /** 현재 보고 있는 날짜 (없으면 '') */
   activeDate: string;
   /** 서버가 계산한 KST 오늘 — 클라이언트 시계를 쓰면 하이드레이션이 어긋난다 */
@@ -63,34 +49,12 @@ export function ContractCalendar({
   activityByStatus,
   newVendors,
   plans,
+  byManager,
   activeDate,
   today,
   query,
 }: ContractCalendarProps) {
-  const router = useRouter();
   const weeks = buildMonthGrid(month);
-
-  // 열림 여부와 "어느 날짜인지"를 따로 든다. 하나로 합쳐서 닫을 때 null 로 만들면,
-  // 100ms 짜리 닫힘 애니메이션이 도는 동안 모달 내용이 빈 채로 보인다.
-  // 날짜는 애니메이션이 끝난 뒤(onOpenChangeComplete) 비운다.
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
-
-  // 밖에서 달이 바뀌면(브라우저 뒤로/앞으로, ‹ › 화살표) 열려 있던 모달을 닫는다.
-  //
-  // 서버는 지금 펼친 달의 42칸치 데이터만 내려준다. 8월 달력에서 8/20 모달을 열어둔 채
-  // 뒤로가기로 9월로 돌아오면, 같은 경로라 이 컴포넌트는 다시 마운트되지 않고 props 만
-  // 갈리는데 — 모달은 그대로 떠 있고 '2026-08-20' 은 새 데이터에 없는 키라 제목은 8월 20일인
-  // 채로 내용만 "기록 없음 · 전부 0" 으로 바뀐다. 실제로는 메모가 있는 날인데 없다고 말한다.
-  //
-  // effect 가 아니라 렌더 중 조정 — contract-list-controls.tsx 가 같은 뒤로가기 문제를
-  // 같은 패턴으로 다룬다.
-  const [syncedMonth, setSyncedMonth] = useState(month);
-  if (month !== syncedMonth) {
-    setSyncedMonth(month);
-    setOpen(false);
-    setSelected(null);
-  }
 
   // 이 달 합계 — 6주 격자에는 앞뒤 달 날짜가 늘 5~14칸 섞여 있어서, 격자 전체를 더하면
   // 항상 다음 달 몫까지 함께 세어진다. 반드시 이 달 날짜만 걸러 더한다.
@@ -104,24 +68,6 @@ export function ContractCalendar({
     }
     monthNew += newVendors[ymd] ?? 0;
     monthPlans += plans[ymd] ?? 0;
-  }
-
-  const selectedStatus = selected ? (activityByStatus[selected] ?? {}) : {};
-  const selectedNew = selected ? (newVendors[selected] ?? 0) : 0;
-  const selectedPlans = selected ? (plans[selected] ?? 0) : 0;
-  const selectedTotal = statusTotal(selectedStatus);
-
-  function openDay(ymd: string) {
-    setSelected(ymd);
-    setOpen(true);
-  }
-
-  function goToDay() {
-    if (!selected) return;
-    // 같은 경로(/contracts)의 검색 파라미터만 바뀌는 이동이라 이 컴포넌트는 다시 마운트되지
-    // 않는다 — 모달을 직접 닫아주지 않으면 새 목록 위에 그대로 떠 있는다.
-    setOpen(false);
-    router.push(buildContractsUrl(query, { date: selected, month }));
   }
 
   return (
@@ -176,19 +122,14 @@ export function ContractCalendar({
           return (
             <Link
               key={ymd}
-              href={buildContractsUrl(query, { date: ymd, month })}
+              // 같은 날짜를 다시 누르면 날짜 보기가 풀린다(토글)
+              href={buildContractsUrl(query, { date: isActive ? '' : ymd, month })}
               // prefetch={false} — 이 링크들은 지금 페이지와 같은 경로(/contracts)를 가리켜,
               // 프리페치 응답이 저장 직후 갱신된 목록을 "저장 전" 스냅샷으로 덮어쓴다.
               // (contract-list-controls.tsx 의 칩들과 같은 이유)
               prefetch={false}
-              onClick={(e) => {
-                // 새 탭·새 창 등 보조 클릭은 링크 그대로 — 그 날 기록이 새 탭에서 열린다
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                e.preventDefault();
-                openDay(ymd);
-              }}
               aria-current={isActive ? 'date' : undefined}
-              aria-label={`${ymd} · ${parts.join(', ')} · 상태별로 자세히 보기`}
+              aria-label={`${ymd} · ${parts.join(', ')}`}
               title={`${ymd} · ${parts.join(' · ')}`}
               className={cn(
                 'relative flex h-[42px] flex-col items-center justify-center rounded-md border transition-colors',
@@ -269,40 +210,52 @@ export function ContractCalendar({
         <DayStatusGrid byStatus={monthTotals} newVendors={monthNew} className="grid-cols-3" size="sm" />
       </div>
 
-      {/* 날짜 하나를 펼친 모달. 42칸마다 하나씩 두면 포털·스크롤락도 42개가 되므로,
-          격자 밖에 딱 하나만 두고 어느 날짜인지만 상태로 든다. */}
-      <Dialog
-        open={open}
-        onOpenChange={(next) => setOpen(next)}
-        onOpenChangeComplete={(isOpen) => {
-          if (!isOpen) setSelected(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{selected ? formatDayHeadingKST(selected) : ''}</DialogTitle>
-            <DialogDescription>
-              {selected && (
-                <>
-                  {relativeDayKST(`${selected}T00:00:00.000Z`)} ·{' '}
-                  {selectedTotal === 0 && selectedNew === 0 && selectedPlans === 0
-                    ? '기록 없음'
-                    : `메모 ${selectedTotal}건 · 신규 등록 ${selectedNew}곳`}
-                  {selectedPlans > 0 && ` · 연락 예정 ${selectedPlans}건`}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+      {/* 담당자별 — 같은 달을 누가 얼마나 움직였나.
+          숫자에 라벨을 붙일 자리가 없어서 위치로 읽는다: 순서가 바로 위 합계 그리드와
+          같은 CONTRACT_STATUSES 순서(재컨텍요망→장기가망→미팅예정→미팅완료→계약완료)라
+          그 그리드가 곧 범례 역할을 한다. 점 색도 같고, 각 칸에 title/스크린리더 라벨을 단다.
 
-          <DayStatusGrid byStatus={selectedStatus} newVendors={selectedNew} className="grid-cols-3" />
+          ⚠️ 메모에는 "누가 썼는지"가 없다. 그래서 업체의 DB담당자로 묶는다 —
+          "정연지가 쓴 메모"가 아니라 "정연지가 맡은 업체에 달린 메모"다. */}
+      {byManager.length > 0 && (
+        <div className="mt-3 border-t border-black/[0.06] pt-3">
+          <h3 className="mb-2 text-xs font-semibold text-neutral-700">
+            담당자별 {Number(month.slice(5))}월 활동{' '}
+            <span className="font-normal text-neutral-600">맡은 업체 기준</span>
+          </h3>
+          <ul className="space-y-2">
+            {byManager.map((m) => (
+              <li key={m.name}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="truncate text-[13px] font-medium">{m.name}</span>
+                  <span className="shrink-0 text-[13px] font-semibold tabular-nums">{m.total}</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2.5">
+                  {CONTRACT_STATUSES.map((st) => {
+                    const n = m.byStatus[st.code] ?? 0;
+                    return (
+                      <span
+                        key={st.code}
+                        className="flex items-center gap-1 text-xs tabular-nums"
+                        title={`${m.name} · ${st.label} ${n}건`}
+                      >
+                        <span
+                          aria-hidden
+                          className="size-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: st.dotVar }}
+                        />
+                        <span className={n === 0 ? 'text-neutral-300' : 'text-neutral-900'}>{n}</span>
+                        <span className="sr-only">{st.label}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-          <DialogFooter>
-            <Button type="button" size="sm" onClick={goToDay} disabled={!selected}>
-              이 날 기록 보기
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

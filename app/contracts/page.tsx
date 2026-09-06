@@ -32,6 +32,7 @@ import { ContractQuickAdd } from '@/components/contract-quick-add';
 import { ContractCalendar } from '@/components/contract-calendar';
 import { ContractActivitySummary, type DayActivity } from '@/components/contract-activity-summary';
 import { ContractUpcomingMeetings, type UpcomingMeeting } from '@/components/contract-upcoming-meetings';
+import { statusTotal } from '@/components/contract-day-stats';
 import {
   CONTRACT_MILESTONES,
   CONTRACT_MILESTONE_CODES,
@@ -54,6 +55,7 @@ import {
   kstDayStartUTC,
   relativeDayKST,
   todayKST,
+  ymdKST,
 } from '@/lib/format-date';
 import {
   countsByCreatedAtAndStatus,
@@ -74,6 +76,9 @@ const MAX_ROWS = 500;
 
 /** 레일의 "다음 연락 예정"에 한 번에 보여줄 개수 */
 const UPCOMING_LIMIT = 5;
+
+/** 레일의 담당자별 집계에 보여줄 사람 수 — 레일이 끝없이 길어지지 않게 상위 몇 명만 */
+const MANAGER_LIMIT = 8;
 
 /** 메모를 하나도 안 남긴 업체의 상태 코드 — CONTRACT_STATUSES 에는 없는, 화면 전용 값 */
 const NONE_STATUS = 'none';
@@ -335,7 +340,9 @@ export default async function ContractsPage({
       where: {
         createdAt: { gte: kstDayStartUTC(gridRange.start), lt: kstDayStartUTC(gridRange.endExclusive) },
       },
-      select: { createdAt: true, status: true },
+      // managerName 을 함께 받아 담당자별 집계까지 이 한 번으로 끝낸다.
+      // 메모에는 작성자가 없어서 "업체의 DB담당자"로 묶는 수밖에 없다.
+      select: { createdAt: true, status: true, contractedVendor: { select: { managerName: true } } },
     }),
     // 달력에 뿌릴 42칸치 신규 등록.
     // 여기만 groupBy 가 아닌 findMany 인 건 실수가 아니다 — createdAt 은 타임스탬프라
@@ -412,6 +419,28 @@ export default async function ContractsPage({
   const overdueCount = livePlans.filter((r) => r.nextContactAt!.toISOString().slice(0, 10) < today).length;
   // 달력에 "이 날 연락 예정" 표시를 위해 — 활동(지나간 일)과 절대 합치지 않는다
   const calendarPlans = countsByDateOnly(livePlans);
+  // 날짜 보기의 "이 날 예정" 칸. 이미 받아온 livePlans 를 거르기만 하므로 쿼리가 늘지 않는다.
+  // 여기 뜨는 건 "이 날 하기로 한 일"이라, 위의 "이 날 한 일"과는 다른 목록이다 —
+  // 미팅예정만 날짜가 둘(잡은 날 / 만나는 날)이라 이렇게 갈라야 섞이지 않는다.
+  const dayPlans = activeDate
+    ? livePlans.filter((r) => r.nextContactAt!.toISOString().slice(0, 10) === activeDate)
+    : [];
+
+  // ── 담당자별 (이 달) ──────────────────────────────────────────────────────
+  // 격자에는 앞뒤 달 날짜가 늘 섞여 있으므로 반드시 이 달 것만 골라 센다 — 월 합계와 같은 규칙.
+  const managerBuckets = new Map<string, Record<string, number>>();
+  for (const r of monthActivityRows) {
+    if (ymdKST(r.createdAt).slice(0, 7) !== activeMonth) continue;
+    const name = r.contractedVendor.managerName?.trim() || '담당자 없음';
+    const bucket = managerBuckets.get(name) ?? {};
+    bucket[r.status] = (bucket[r.status] ?? 0) + 1;
+    managerBuckets.set(name, bucket);
+  }
+  const byManager = [...managerBuckets.entries()]
+    .map(([name, byStatus]) => ({ name, byStatus, total: statusTotal(byStatus) }))
+    // 많이 움직인 사람부터. 동점이면 이름순이라 순서가 요청마다 흔들리지 않는다.
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
+    .slice(0, MANAGER_LIMIT);
 
   // ── 이정표 (업체 × 단계 → 날짜) ───────────────────────────────────────────
   // 내림차순으로 받았으니 먼저 만난 것이 그 단계의 최신 메모다. 이후 것은 버린다.
@@ -524,6 +553,7 @@ export default async function ContractsPage({
                       <span className="text-xs text-neutral-600">{relativeDayKST(dateOnlyUTC(activeDate))}</span>
                       <span className="text-sm text-neutral-600 tabular-nums">
                         메모 {nf.format(dateMemos.length)}건 · 신규 등록 {nf.format(dateNewVendors.length)}곳
+                        {dayPlans.length > 0 && ` · 예정 ${nf.format(dayPlans.length)}건`}
                       </span>
                     </div>
                     {dateStatusCounts.size > 0 && (
@@ -557,12 +587,55 @@ export default async function ContractsPage({
                     )}
                   </div>
 
+                  {/* 이 날 하기로 한 일 — 위 목록("이 날 한 일")과 일부러 갈라 둔다.
+                      지난 날짜에서도 보여준다: "어제 미팅 잡혀 있었는데 했나?" 가 바로 확인된다. */}
+                  {dayPlans.length > 0 && (
+                    <div className="card-surface animate-fade-up mb-3 overflow-hidden">
+                      <h3 className="border-b border-black/[0.06] px-5 py-2.5 text-sm font-semibold">
+                        이 날 예정{' '}
+                        <span className="ml-1 font-normal text-neutral-600 tabular-nums">{dayPlans.length}건</span>
+                        <span className="ml-2 text-xs font-normal text-neutral-600">
+                          (미리 잡아둔 일정 — 위의 &lsquo;한 일&rsquo;과 별개입니다)
+                        </span>
+                      </h3>
+                      <ul className="divide-y divide-black/[0.06]">
+                        {dayPlans.map((r) => (
+                          <li key={r.id}>
+                            <Link
+                              href={`/contracts/${r.contractedVendor.id}`}
+                              className="flex flex-wrap items-center gap-2 px-5 py-2.5 transition-colors hover:bg-neutral-900/5"
+                            >
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700">
+                                <span
+                                  aria-hidden
+                                  className="size-1.5 rounded-full"
+                                  style={{ backgroundColor: contractStatusDot(r.status) }}
+                                />
+                                {contractStatusLabel(r.status)}
+                              </span>
+                              <span className="text-[15px] font-semibold">{r.contractedVendor.name}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {dateMemos.length === 0 ? (
                     <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-16 text-center">
-                      <p className="text-neutral-600">이 날짜에 남긴 메모가 없습니다.</p>
+                      <p className="text-neutral-600">
+                        {dayPlans.length > 0
+                          ? '이 날 남긴 메모는 없습니다. 위는 미리 잡아둔 일정입니다.'
+                          : '이 날짜에 남긴 메모가 없습니다.'}
+                      </p>
                     </div>
                   ) : (
-                    <ul className="card-surface animate-fade-up divide-y divide-black/[0.06] overflow-hidden">
+                    <section className="card-surface animate-fade-up overflow-hidden">
+                      <h3 className="border-b border-black/[0.06] px-5 py-2.5 text-sm font-semibold">
+                        이 날 한 일{' '}
+                        <span className="ml-1 font-normal text-neutral-600 tabular-nums">{dateMemos.length}건</span>
+                      </h3>
+                      <ul className="divide-y divide-black/[0.06]">
                       {dateMemos.map((m) => {
                         return (
                           <li key={m.id} className="px-5 py-4">
@@ -598,7 +671,8 @@ export default async function ContractsPage({
                           </li>
                         );
                       })}
-                    </ul>
+                      </ul>
+                    </section>
                   )}
                 </>
               ) : (
@@ -755,6 +829,7 @@ export default async function ContractsPage({
                 activityByStatus={calendarActivityByStatus}
                 newVendors={calendarNewVendors}
                 plans={calendarPlans}
+                byManager={byManager}
                 activeDate={activeDate}
                 today={today}
                 query={query}
