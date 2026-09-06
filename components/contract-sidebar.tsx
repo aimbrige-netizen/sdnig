@@ -117,7 +117,9 @@ export function ContractSidebar({ vendor }: ContractSidebarProps) {
         setDeleting(false);
         return;
       }
-      router.push('/contracts');
+      // 삭제됐다는 사실을 목록에서 한 번 알려준다. 예전엔 아무 말 없이 목록으로 튕겨서,
+      // 정말 지워진 건지 클릭이 안 먹은 건지 사용자가 구분할 방법이 없었다.
+      router.push(`/contracts?deleted=${encodeURIComponent(vendor.name)}`);
     } catch {
       setErrors(['네트워크 오류로 삭제하지 못했습니다.']);
       setDeleting(false);
