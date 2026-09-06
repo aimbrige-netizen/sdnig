@@ -72,3 +72,28 @@ export const CONTRACT_MILESTONES = [
 ] as const;
 
 export const CONTRACT_MILESTONE_CODES = CONTRACT_MILESTONES.map((m) => m.code) as ContractStatus[];
+
+/** 담당자 실적으로 세는 "결과" 두 단계.
+ *
+ *  미팅예정은 뺀다 — 아직 일어난 일이 아니라 잡아만 둔 약속이고, 그건 레일의
+ *  "다음 연락 예정"이 이미 보여준다. 재컨텍요망·장기가망도 뺀다: 진행 중인 상태지
+ *  결과가 아니다. 세로로 다섯 칸을 늘어놓으면 어느 게 어느 건지 못 읽는다는
+ *  피드백을 받고 둘로 줄였다 — 대신 숫자마다 글자 라벨을 붙인다. */
+export const CONTRACT_RESULT_STATUSES = [
+  { code: 'consulted', label: '미팅완료', colorVar: 'var(--data-status-consulted)' },
+  { code: 'contracted', label: '계약완료', colorVar: 'var(--data-status-contracted)' },
+] as const;
+
+/** DB담당자 명단.
+ *
+ *  업체를 등록할 때 여기서 고르게 하고, 그 뒤로 그 업체에 달리는 메모는 전부 이 담당자
+ *  실적으로 잡힌다(캘린더 아래 "담당자별 실적"). 자유 입력이었을 때는 같은 사람이
+ *  "정연지"/"정연지 " 처럼 갈려 들어가 집계가 쪼개졌다.
+ *
+ *  ⚠️ 사람이 늘거나 바뀌면 이 배열만 고치면 된다. 다만 배포가 한 번 필요하다 —
+ *  화면에서 담당자를 추가하는 기능은 아직 없다(3명 규모라 그게 더 단순하다).
+ *
+ *  ⚠️ 여기 없는 이름이 이미 저장돼 있는 업체도 있다(자유 입력이던 시절의 값). 그건
+ *  지우지 않는다 — 수정 폼에서는 그 값도 선택지로 함께 띄워, 다른 칸만 고치다가
+ *  담당자가 조용히 바뀌는 일이 없게 한다(components/contract-fields.tsx). */
+export const DB_MANAGERS = ['김윤옥', '정연지'] as const;

@@ -5,7 +5,7 @@ import { useId } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/vendor-form/native-select';
-import { CONTRACT_TYPES, type ContractType } from '@/lib/contract-constants';
+import { CONTRACT_TYPES, DB_MANAGERS, type ContractType } from '@/lib/contract-constants';
 import { cn } from '@/lib/utils';
 
 export interface ContractFormState {
@@ -82,6 +82,17 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, narro
   // 이 컴포넌트는 빠른등록 폼과 수정 다이얼로그에서 동시에 렌더될 수 있으므로 id 가 겹치면 안 된다
   const uid = useId();
   const id = (field: string) => `${uid}-${field}`;
+
+  // 명단에 없는 이름이 이미 들어 있으면(자유 입력이던 시절의 값) 그 값도 선택지로 넣는다.
+  // 안 넣으면 <select> 가 그 값을 표시하지 못해 첫 항목으로 보이고, 사용자가 전화번호만
+  // 고쳐 저장해도 담당자가 조용히 바뀐다.
+  const current = state.managerName.trim();
+  const managerOptions = [
+    ...DB_MANAGERS.map((m) => ({ value: m, label: m })),
+    ...(current && !DB_MANAGERS.some((m) => m === current)
+      ? [{ value: current, label: `${current} (기존 값)` }]
+      : []),
+  ];
 
   const handleKeyDown = onEnter
     ? (e: React.KeyboardEvent) => {
@@ -160,14 +171,19 @@ export function ContractFields({ state, patch, onEnter, nameRef, disabled, narro
         <FieldLabel htmlFor={id('manager')} required>
           DB담당자
         </FieldLabel>
-        <Input
+        {/* 자유 입력이 아니라 명단에서 고른다 — 예전엔 같은 사람이 오타로 갈려 들어가
+            담당자별 집계가 쪼개졌다. 명단은 lib/contract-constants.ts 의 DB_MANAGERS.
+            managerOptions 가 기존 값을 함께 넣어주므로(위 참고) 옛 이름이 든 업체를
+            수정해도 담당자가 조용히 바뀌지 않는다. */}
+        <NativeSelect
           id={id('manager')}
           aria-required
+          placeholder="담당자 선택"
           value={state.managerName}
           onChange={(e) => patch({ managerName: e.target.value })}
-          onKeyDown={handleKeyDown}
+          options={managerOptions}
           disabled={disabled}
-          placeholder="예: 홍길동"
+          className="w-full"
         />
       </div>
     </div>
