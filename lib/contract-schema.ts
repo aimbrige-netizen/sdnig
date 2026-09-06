@@ -59,7 +59,13 @@ export const contractMemoPayloadSchema = z
     status: z.enum(CONTRACT_STATUS_CODES as [ContractStatus, ...ContractStatus[]], {
       error: '진행 상태를 선택해주세요',
     }),
-    memoDate: dateOnly,
+    // 다음에 언제 연락할지 — 선택 입력. 빈 문자열도 "안 정함"으로 받아 넘긴다
+    // (<input type="date"> 를 비우면 '' 가 오고, 아예 안 건드리면 undefined 가 온다).
+    // 메모를 남긴 날짜 자체는 물어보지 않는다 — createdAt 이 곧 그 날짜다.
+    nextContactAt: z
+      .union([dateOnly, z.literal('')])
+      .optional()
+      .transform((v) => (v === '' || v === undefined ? null : v)),
     content: z.string().trim().min(1, '메모 내용을 입력해주세요').max(1000, '1000자 이내로 입력해주세요'),
   })
   .strict();

@@ -66,18 +66,12 @@ export function monthGridRange(ym: string): { start: string; endExclusive: strin
 
 // 아래 집계 함수들이 Map 이 아니라 평범한 객체를 돌려주는 이유: 이 값이 그대로
 // 클라이언트 컴포넌트의 props 로 건너가는데, Map 은 직렬화 경계를 못 넘는다.
+//
+// ⚠️ "활동"은 전부 createdAt(메모를 남긴 시각) 기준이다. 예전엔 사용자가 고르던 memoDate
+//    를 썼는데, 그 칸이 미래 예정일도 겸해서 아직 하지도 않은 미팅이 활동 건수에 섞였다.
 
-/** groupBy(['memoDate']) 결과 → { 'YYYY-MM-DD': 건수 } */
-export function countsByMemoDate(rows: { memoDate: Date; _count: { _all: number } }[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const r of rows) {
-    const key = r.memoDate.toISOString().slice(0, 10);
-    out[key] = (out[key] ?? 0) + r._count._all;
-  }
-  return out;
-}
-
-/** createdAt(타임스탬프) 행들 → { 'YYYY-MM-DD': 건수 }. 경계는 KST 달력 하루. */
+/** 메모 행들(작성 시각 기준) → { 'YYYY-MM-DD': 건수 }.
+ *  경계는 KST 달력 하루 — 즉 "그 날 남긴 메모가 몇 건인가". */
 export function countsByCreatedAtKST(rows: { createdAt: Date }[]): Record<string, number> {
   const out: Record<string, number> = {};
   for (const r of rows) {
@@ -87,15 +81,32 @@ export function countsByCreatedAtKST(rows: { createdAt: Date }[]): Record<string
   return out;
 }
 
-/** groupBy(['memoDate','status']) 결과 → { 'YYYY-MM-DD': { 상태코드: 건수 } } */
-export function countsByDateAndStatus(
-  rows: { memoDate: Date; status: string; _count: { _all: number } }[]
+/** 메모 행들 → { 'YYYY-MM-DD': { 상태코드: 건수 } }. 역시 KST 달력 하루 기준.
+ *
+ *  createdAt 은 타임스탬프라 DB 의 groupBy 로는 이걸 못 만든다 — groupBy(['createdAt'])
+ *  는 밀리초까지 다른 값이라 메모 하나당 한 행이 나오고, DB 쪽 날짜 절단은 UTC 기준이라
+ *  KST 00~09시에 남긴 메모가 전부 하루 앞으로 밀린다. raw SQL 을 쓰지 않는 한 이렇게
+ *  행을 받아 JS 에서 KST 로 묶는 게 유일하게 맞는 방법이다. */
+export function countsByCreatedAtAndStatus(
+  rows: { createdAt: Date; status: string }[]
 ): Record<string, Record<string, number>> {
   const out: Record<string, Record<string, number>> = {};
   for (const r of rows) {
-    const key = r.memoDate.toISOString().slice(0, 10);
+    const key = ymdKST(r.createdAt);
     const inner = (out[key] ??= {});
-    inner[r.status] = (inner[r.status] ?? 0) + r._count._all;
+    inner[r.status] = (inner[r.status] ?? 0) + 1;
+  }
+  return out;
+}
+
+/** 예정일(@db.Date, UTC 자정) 행들 → { 'YYYY-MM-DD': 건수 }.
+ *  앞으로 할 일이라 활동 집계와는 절대 합치지 않는다 — 달력에서도 다른 표시를 쓴다. */
+export function countsByDateOnly(rows: { nextContactAt: Date | null }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.nextContactAt) continue;
+    const key = r.nextContactAt.toISOString().slice(0, 10);
+    out[key] = (out[key] ?? 0) + 1;
   }
   return out;
 }

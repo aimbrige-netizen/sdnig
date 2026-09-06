@@ -6,6 +6,10 @@
 // 43px 칸 안에서 글자가 9px까지 줄어 결국 아무것도 안 보인다 — 그 날 새로 등록된 업체가
 // 있으면 숫자 옆 점으로만 표시한다.
 //
+// 칸 숫자는 "그 날 남긴 메모 수" = 지나간 활동이다. 앞으로 할 일(다음 연락 예정)은 절대
+// 이 숫자에 안 섞고 파란 점으로 따로 표시한다 — 예전엔 한 칸이 둘을 겸해서 아직 하지도
+// 않은 미팅이 이번 달 활동 건수에 들어가 있었다.
+//
 // 날짜를 누르면 상태별 건수(재컨텍요망/장기가망/미팅예정/미팅완료/계약완료 + 신규 등록)를
 // 모달로 펼친다. 처음엔 모달 없이 곧장 ?date= 로 넘기게 만들었었는데, 그러면 상태별로
 // 몇 건인지 보려고 매번 페이지를 갈아끼워야 해서 달력을 훑을 수가 없다는 피드백을 받았다.
@@ -44,6 +48,8 @@ interface ContractCalendarProps {
   activityByStatus: Record<string, Record<string, number>>;
   /** 날짜(YYYY-MM-DD) → 그 날 새로 등록된 업체 수 */
   newVendors: Record<string, number>;
+  /** 날짜(YYYY-MM-DD) → 그 날로 잡아둔 다음 연락 예정 건수 (앞으로 할 일) */
+  plans: Record<string, number>;
   /** 현재 보고 있는 날짜 (없으면 '') */
   activeDate: string;
   /** 서버가 계산한 KST 오늘 — 클라이언트 시계를 쓰면 하이드레이션이 어긋난다 */
@@ -56,6 +62,7 @@ export function ContractCalendar({
   activity,
   activityByStatus,
   newVendors,
+  plans,
   activeDate,
   today,
   query,
@@ -89,16 +96,19 @@ export function ContractCalendar({
   // 항상 다음 달 몫까지 함께 세어진다. 반드시 이 달 날짜만 걸러 더한다.
   const monthTotals: Record<string, number> = {};
   let monthNew = 0;
+  let monthPlans = 0;
   for (const ymd of weeks.flat()) {
     if (ymd.slice(0, 7) !== month) continue;
     for (const [code, n] of Object.entries(activityByStatus[ymd] ?? {})) {
       monthTotals[code] = (monthTotals[code] ?? 0) + n;
     }
     monthNew += newVendors[ymd] ?? 0;
+    monthPlans += plans[ymd] ?? 0;
   }
 
   const selectedStatus = selected ? (activityByStatus[selected] ?? {}) : {};
   const selectedNew = selected ? (newVendors[selected] ?? 0) : 0;
+  const selectedPlans = selected ? (plans[selected] ?? 0) : 0;
   const selectedTotal = statusTotal(selectedStatus);
 
   function openDay(ymd: string) {
@@ -153,12 +163,14 @@ export function ContractCalendar({
           const inMonth = ymd.slice(0, 7) === month;
           const count = activity[ymd] ?? 0;
           const newCount = newVendors[ymd] ?? 0;
+          const planCount = plans[ymd] ?? 0;
           const isToday = ymd === today;
           const isActive = ymd === activeDate;
 
           const parts = [
             count > 0 ? `메모 ${count}건` : '메모 없음',
             newCount > 0 ? `신규 등록 ${newCount}곳` : '',
+            planCount > 0 ? `연락 예정 ${planCount}건` : '',
           ].filter(Boolean);
 
           return (
@@ -212,6 +224,14 @@ export function ContractCalendar({
                     style={{ backgroundColor: isActive ? '#fff' : 'var(--brand-to)' }}
                   />
                 )}
+                {/* 예정은 활동과 색을 달리한다 — 숫자로 넣으면 "한 일"과 구분이 안 된다 */}
+                {planCount > 0 && (
+                  <span
+                    aria-hidden
+                    className="size-1 rounded-full"
+                    style={{ backgroundColor: isActive ? '#fff' : 'var(--data-status-scheduled)' }}
+                  />
+                )}
               </span>
             </Link>
           );
@@ -220,11 +240,19 @@ export function ContractCalendar({
 
       <p className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-black/[0.06] pt-2.5 text-xs text-neutral-600">
         <span>
-          <span className="font-semibold text-neutral-900">숫자</span> = 메모 건수
+          <span className="font-semibold text-neutral-900">숫자</span> = 그 날 남긴 메모
         </span>
         <span className="inline-flex items-center gap-1">
           <span aria-hidden className="size-1 rounded-full" style={{ backgroundColor: 'var(--brand-to)' }} />
-          점 = 신규 등록
+          신규 등록
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span
+            aria-hidden
+            className="size-1 rounded-full"
+            style={{ backgroundColor: 'var(--data-status-scheduled)' }}
+          />
+          연락 예정
         </span>
       </p>
 
@@ -235,6 +263,7 @@ export function ContractCalendar({
           {Number(month.slice(5))}월 합계{' '}
           <span className="font-normal text-neutral-600 tabular-nums">
             메모 {statusTotal(monthTotals)}건 · 신규 {monthNew}곳
+            {monthPlans > 0 && ` · 연락 예정 ${monthPlans}건`}
           </span>
         </h3>
         <DayStatusGrid byStatus={monthTotals} newVendors={monthNew} className="grid-cols-3" size="sm" />
@@ -256,9 +285,10 @@ export function ContractCalendar({
               {selected && (
                 <>
                   {relativeDayKST(`${selected}T00:00:00.000Z`)} ·{' '}
-                  {selectedTotal === 0 && selectedNew === 0
+                  {selectedTotal === 0 && selectedNew === 0 && selectedPlans === 0
                     ? '기록 없음'
                     : `메모 ${selectedTotal}건 · 신규 등록 ${selectedNew}곳`}
+                  {selectedPlans > 0 && ` · 연락 예정 ${selectedPlans}건`}
                 </>
               )}
             </DialogDescription>

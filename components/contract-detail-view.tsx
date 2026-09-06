@@ -15,7 +15,8 @@ import { ContractMemoTimeline } from './contract-memo-timeline';
 export interface ContractMemoDTO {
   id: number;
   status: string;
-  memoDate: string; // ISO
+  /** 다음 연락 예정일(ISO) — 안 정했으면 null */
+  nextContactAt: string | null;
   content: string;
   createdAt: string; // ISO
 }
@@ -32,7 +33,7 @@ export interface ContractDetailDTO {
 }
 
 function memosSig(memos: ContractMemoDTO[]): string {
-  return JSON.stringify(memos.map((m) => [m.id, m.status, m.memoDate, m.content, m.createdAt]));
+  return JSON.stringify(memos.map((m) => [m.id, m.status, m.nextContactAt, m.content, m.createdAt]));
 }
 
 interface ContractDetailViewProps {

@@ -33,7 +33,7 @@ export default async function ContractDetailPage({ params }: { params: Promise<{
     memos: vendor.memos.map((m) => ({
       id: m.id,
       status: m.status,
-      memoDate: m.memoDate.toISOString(),
+      nextContactAt: m.nextContactAt ? m.nextContactAt.toISOString() : null,
       content: m.content,
       createdAt: m.createdAt.toISOString(),
     })),
