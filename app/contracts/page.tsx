@@ -33,6 +33,8 @@ import { ContractCalendar } from '@/components/contract-calendar';
 import { ContractActivitySummary, type DayActivity } from '@/components/contract-activity-summary';
 import { ContractUpcomingMeetings, type UpcomingMeeting } from '@/components/contract-upcoming-meetings';
 import {
+  CONTRACT_MILESTONES,
+  CONTRACT_MILESTONE_CODES,
   CONTRACT_STATUSES,
   CONTRACT_TYPES,
   contractStatusDot,
@@ -45,6 +47,7 @@ import { type ContractQuery, type ContractSort } from '@/lib/contract-query';
 import {
   addDaysYmd,
   dateOnlyUTC,
+  formatDateKST,
   formatDateTimeKST,
   formatDayHeadingKST,
   formatTimeKST,
@@ -130,6 +133,43 @@ function StatusBadge({ status, lastMemoDate }: { status: string | null; lastMemo
       {lastMemoDate && (
         <span className="shrink-0 text-[13px] text-neutral-600 tabular-nums">{relativeDayKST(lastMemoDate)}</span>
       )}
+    </span>
+  );
+}
+
+/** 이정표 한 칸 — 그 단계 메모를 남긴 적이 있으면 날짜를, 없으면 옅은 "–" 를 찍는다.
+ *
+ *  "찍혔다"는 사실이 먼저 눈에 들어와야 해서 날짜에 단계 색을 그대로 입히고 굵게 쓴다.
+ *  세 색 모두 흰 배경에서 본문 대비를 넘긴다(5.4 / 8.0 / 12.0 : 1) — 오른쪽으로 갈수록
+ *  진해져서 어디까지 갔는지가 색만으로도 읽힌다.
+ *
+ *  미팅예정만 날짜의 뜻이 다르다: 잡아둔 미팅 날짜(nextContactAt)가 있으면 그걸 쓰고,
+ *  안 정했으면 "미팅예정으로 표시한 날"(createdAt)로 대신한다. 어느 쪽인지는 title 로 밝힌다. */
+function MilestoneCell({
+  label,
+  color,
+  hit,
+}: {
+  label: string;
+  color: string;
+  hit?: { createdAt: Date; nextContactAt: Date | null };
+}) {
+  if (!hit) {
+    return (
+      <span className="text-[13px] text-neutral-300" title={`${label} 기록 없음`}>
+        –<span className="sr-only">{label} 기록 없음</span>
+      </span>
+    );
+  }
+  const planned = hit.nextContactAt;
+  const shown = planned ?? hit.createdAt;
+  const title = planned
+    ? `${label} — 예정일 ${formatDateKST(planned)} (${formatDateTimeKST(hit.createdAt)} 기록)`
+    : `${label} — ${formatDateTimeKST(hit.createdAt)} 기록`;
+  return (
+    <span className="text-[13px] font-semibold tabular-nums" style={{ color }} title={title}>
+      {formatDateKST(shown).slice(5)}
+      <span className="sr-only"> {label}</span>
     </span>
   );
 }
@@ -244,6 +284,7 @@ export default async function ContractsPage({
     monthActivityRows,
     monthNewRows,
     plannedRows,
+    milestoneRows,
   ] = await Promise.all([
     // 업체 명단 — 날짜 보기에서는 안 쓴다
     activeDate
@@ -327,6 +368,17 @@ export default async function ContractsPage({
         },
       },
     }),
+    // 목록의 이정표 열(미팅예정/미팅완료/계약완료)에 찍을 날짜.
+    // 업체마다 그 상태의 **가장 최근** 메모 하나씩만 있으면 되는데, Prisma 로는
+    // "그룹별 상위 1건"을 못 뽑는다 — 그래서 내림차순으로 받아 JS 에서 처음 만난 것만 남긴다.
+    // 범위는 화면에 뜨는 목록과 같은 조건(listWhere)으로 묶어 한 번에 가져온다.
+    activeDate
+      ? Promise.resolve([])
+      : prisma.contractMemo.findMany({
+          where: { status: { in: CONTRACT_MILESTONE_CODES }, contractedVendor: listWhere },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          select: { contractedVendorId: true, status: true, createdAt: true, nextContactAt: true },
+        }),
   ]);
 
   // ── 활동 요약 (어제 / 오늘) ────────────────────────────────────────────────
@@ -360,6 +412,17 @@ export default async function ContractsPage({
   const overdueCount = livePlans.filter((r) => r.nextContactAt!.toISOString().slice(0, 10) < today).length;
   // 달력에 "이 날 연락 예정" 표시를 위해 — 활동(지나간 일)과 절대 합치지 않는다
   const calendarPlans = countsByDateOnly(livePlans);
+
+  // ── 이정표 (업체 × 단계 → 날짜) ───────────────────────────────────────────
+  // 내림차순으로 받았으니 먼저 만난 것이 그 단계의 최신 메모다. 이후 것은 버린다.
+  const milestoneOf = new Map<number, Map<string, { createdAt: Date; nextContactAt: Date | null }>>();
+  for (const r of milestoneRows) {
+    const perVendor = milestoneOf.get(r.contractedVendorId) ?? new Map();
+    if (!perVendor.has(r.status)) {
+      perVendor.set(r.status, { createdAt: r.createdAt, nextContactAt: r.nextContactAt });
+      milestoneOf.set(r.contractedVendorId, perVendor);
+    }
+  }
 
   // 각 칩 그룹의 "전체" 항목 — scopeTotal(검색어·정보미비만 반영) 을 그대로 쓰면 안 된다.
   // 다른 축(형태/상태)에 이미 필터가 걸려 있을 때, "전체"를 눌러도 실제로는 그 다른 축의
@@ -558,24 +621,28 @@ export default async function ContractsPage({
                       )}
                     </div>
                   ) : (
-                    // 열을 7개에서 5개로 줄였다 — 주소는 업체명 아래 둘째 줄로, 계약 형태는
-                    // 업체명 앞 점으로 접었다. 예전엔 한 행이 화면 끝까지 늘어져서 업체명과
-                    // 진행 상태 사이 눈이 한참을 건너가야 했다.
+                    // 전화번호 열을 빼고 그 자리에 이정표 3단계(미팅예정/미팅완료/계약완료)를
+                    // 넣었다 — 한 줄만 봐도 어디까지 갔는지 보이라고. 전화번호는 없어진 게
+                    // 아니라 업체명 아래 둘째 줄로 내려갔다(주소와 같은 줄).
                     <div className="card-surface animate-fade-up overflow-hidden">
                       {/* table-fixed — auto 레이아웃이면 긴 주소 하나가 열 폭을 다 먹어
                           업체명이 찌그러진다. 좁은 화면에서는 짓눌리는 대신 가로 스크롤.
-                          min-w 가 820px 인 이유: 진행 상태 칸의 배지와 날짜는 둘 다 shrink-0
+                          min-w 가 980px 인 이유: 진행 상태 칸의 배지와 날짜는 둘 다 shrink-0
                           이고 셀이 whitespace-nowrap 이라, 칸이 좁아지면 줄어드는 게 아니라
-                          옆 칸으로 삐져나온다. 이 폭이 안 삐져나오는 하한이다.
-                          퍼센트는 늘어난 폭이 주소(유일하게 잘리는 열)로 가도록 잡았다. */}
-                      <Table className="table-fixed min-w-[820px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3">
+                          옆 칸으로 삐져나온다. 열이 5개에서 7개로 늘어 하한도 820 → 980 이다. */}
+                      <Table className="table-fixed min-w-[980px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3">
                         <TableHeader>
                           <TableRow className="[&_th]:text-xs [&_th]:font-semibold [&_th]:tracking-wide [&_th]:text-neutral-600">
-                            <TableHead style={{ width: '42%' }}>업체 · 주소</TableHead>
-                            <TableHead style={{ width: '17%' }}>전화번호</TableHead>
-                            <TableHead style={{ width: '10%' }}>DB담당자</TableHead>
-                            <TableHead style={{ width: '19%' }}>진행 상태</TableHead>
-                            <TableHead style={{ width: '12%' }} className="text-right">
+                            <TableHead style={{ width: '32%' }}>업체 · 연락처</TableHead>
+                            <TableHead style={{ width: '9%' }}>DB담당자</TableHead>
+                            <TableHead style={{ width: '17%' }}>진행 상태</TableHead>
+                            {/* 이정표 — 그 단계 메모를 남긴 적이 있으면 날짜, 없으면 빈 칸 */}
+                            {CONTRACT_MILESTONES.map((m) => (
+                              <TableHead key={m.code} style={{ width: '11%' }} className="text-center">
+                                {m.label}
+                              </TableHead>
+                            ))}
+                            <TableHead style={{ width: '9%' }} className="text-right">
                               등록
                             </TableHead>
                           </TableRow>
@@ -606,34 +673,40 @@ export default async function ContractsPage({
                                     </span>
                                     <span className="sr-only">({contractTypeLabel(v.contractType)})</span>
                                   </Link>
-                                  {/* max-width 는 table-layout:auto 인 <td> 에서 무시되므로,
+                                  {/* 둘째 줄에 전화번호·주소를 함께 둔다 — 전화번호 열을 빼서
+                                      생긴 자리에 이정표를 넣었지만, 번호 자체를 잃지는 않는다.
+                                      둘 다 없으면 "미입력"을 한 번만 적는다(예전엔 열마다
+                                      따로 떠서 한 줄에 "미입력"이 두 번 보였다).
+                                      max-width 는 table-layout:auto 인 <td> 에서 무시되므로
                                       안쪽 블록 요소에 걸어야 긴 주소가 실제로 말줄임된다. */}
-                                  {v.address?.trim() ? (
+                                  {v.phone?.trim() || v.address?.trim() ? (
                                     <span
-                                      className="mt-0.5 block truncate pl-[13px] text-[13px] text-neutral-600"
-                                      title={v.address}
+                                      className="mt-0.5 flex items-baseline gap-1.5 truncate pl-[13px] text-[13px] text-neutral-600"
+                                      title={[v.phone, v.address].filter(Boolean).join(' · ')}
                                     >
-                                      {v.address}
+                                      {v.phone?.trim() && (
+                                        // stopPropagation 이 없어도 된다 — ContractRow 의 행 onClick 은
+                                        // el.closest('a') 로 <a> 위 클릭을 이미 비켜준다.
+                                        <a
+                                          href={`tel:${v.phone.replace(/[^0-9+]/g, '')}`}
+                                          className="shrink-0 tabular-nums hover:underline"
+                                        >
+                                          {v.phone}
+                                        </a>
+                                      )}
+                                      {v.phone?.trim() && v.address?.trim() && (
+                                        <span aria-hidden className="shrink-0 text-neutral-400">
+                                          ·
+                                        </span>
+                                      )}
+                                      {v.address?.trim() && <span className="truncate">{v.address}</span>}
                                     </span>
                                   ) : (
                                     <span
                                       className="mt-0.5 block pl-[13px] text-[13px]"
                                       style={{ color: 'var(--data-warning-ink)' }}
                                     >
-                                      주소 미입력
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="tabular-nums">
-                                  {v.phone?.trim() ? (
-                                    // stopPropagation 이 없어도 된다 — ContractRow 의 행 onClick 은
-                                    // el.closest('a') 로 <a> 위 클릭을 이미 비켜준다.
-                                    <a href={`tel:${v.phone.replace(/[^0-9+]/g, '')}`} className="text-sm hover:underline">
-                                      {v.phone}
-                                    </a>
-                                  ) : (
-                                    <span className="text-[13px]" style={{ color: 'var(--data-warning-ink)' }}>
-                                      미입력
+                                      전화번호·주소 미입력
                                     </span>
                                   )}
                                 </TableCell>
@@ -643,6 +716,15 @@ export default async function ContractsPage({
                                 <TableCell>
                                   <StatusBadge status={latestStatus} lastMemoDate={lastMemoDate} />
                                 </TableCell>
+                                {CONTRACT_MILESTONES.map((m) => (
+                                  <TableCell key={m.code} className="text-center">
+                                    <MilestoneCell
+                                      label={m.label}
+                                      color={m.colorVar}
+                                      hit={milestoneOf.get(v.id)?.get(m.code)}
+                                    />
+                                  </TableCell>
+                                ))}
                                 <TableCell className="text-right text-[13px] text-neutral-600 tabular-nums">
                                   <span title={formatDateTimeKST(v.createdAt)}>{relativeDayKST(v.createdAt)}</span>
                                   {incomplete && <span className="sr-only"> (정보 미비)</span>}
