@@ -32,10 +32,10 @@ import { ContractQuickAdd } from '@/components/contract-quick-add';
 import { ContractCalendar } from '@/components/contract-calendar';
 import { ContractActivitySummary, type DayActivity } from '@/components/contract-activity-summary';
 import { ContractUpcomingMeetings, type UpcomingMeeting } from '@/components/contract-upcoming-meetings';
-import { statusTotal } from '@/components/contract-day-stats';
 import {
   CONTRACT_MILESTONES,
   CONTRACT_MILESTONE_CODES,
+  CONTRACT_RESULT_STATUSES,
   CONTRACT_STATUSES,
   CONTRACT_TYPES,
   contractStatusDot,
@@ -79,6 +79,9 @@ const UPCOMING_LIMIT = 5;
 
 /** 레일의 담당자별 집계에 보여줄 사람 수 — 레일이 끝없이 길어지지 않게 상위 몇 명만 */
 const MANAGER_LIMIT = 8;
+
+/** 담당자 실적으로 세는 상태 (미팅완료·계약완료) */
+const RESULT_CODES = new Set<string>(CONTRACT_RESULT_STATUSES.map((s) => s.code));
 
 /** 메모를 하나도 안 남긴 업체의 상태 코드 — CONTRACT_STATUSES 에는 없는, 화면 전용 값 */
 const NONE_STATUS = 'none';
@@ -431,15 +434,20 @@ export default async function ContractsPage({
   const managerBuckets = new Map<string, Record<string, number>>();
   for (const r of monthActivityRows) {
     if (ymdKST(r.createdAt).slice(0, 7) !== activeMonth) continue;
+    if (!RESULT_CODES.has(r.status)) continue; // 미팅완료·계약완료만 실적으로 센다
     const name = r.contractedVendor.managerName?.trim() || '담당자 없음';
     const bucket = managerBuckets.get(name) ?? {};
     bucket[r.status] = (bucket[r.status] ?? 0) + 1;
     managerBuckets.set(name, bucket);
   }
   const byManager = [...managerBuckets.entries()]
-    .map(([name, byStatus]) => ({ name, byStatus, total: statusTotal(byStatus) }))
-    // 많이 움직인 사람부터. 동점이면 이름순이라 순서가 요청마다 흔들리지 않는다.
-    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'))
+    .map(([name, counts]) => ({ name, counts }))
+    // 많이 한 사람부터. 동점이면 이름순이라 순서가 요청마다 흔들리지 않는다.
+    .sort(
+      (a, b) =>
+        Object.values(b.counts).reduce((x, y) => x + y, 0) -
+          Object.values(a.counts).reduce((x, y) => x + y, 0) || a.name.localeCompare(b.name, 'ko')
+    )
     .slice(0, MANAGER_LIMIT);
 
   // ── 이정표 (업체 × 단계 → 날짜) ───────────────────────────────────────────
@@ -705,6 +713,9 @@ export default async function ContractsPage({
                           이고 셀이 whitespace-nowrap 이라, 칸이 좁아지면 줄어드는 게 아니라
                           옆 칸으로 삐져나온다. 열이 5개에서 7개로 늘어 하한도 820 → 980 이다. */}
                       <Table className="table-fixed min-w-[980px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3">
+                        <caption className="sr-only">
+                          계약 업체 목록 — 업체별 연락처와 진행 단계별 날짜
+                        </caption>
                         <TableHeader>
                           <TableRow className="[&_th]:text-xs [&_th]:font-semibold [&_th]:tracking-wide [&_th]:text-neutral-600">
                             <TableHead style={{ width: '32%' }}>업체 · 연락처</TableHead>

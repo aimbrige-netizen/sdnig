@@ -72,3 +72,14 @@ export const CONTRACT_MILESTONES = [
 ] as const;
 
 export const CONTRACT_MILESTONE_CODES = CONTRACT_MILESTONES.map((m) => m.code) as ContractStatus[];
+
+/** 담당자 실적으로 세는 "결과" 두 단계.
+ *
+ *  미팅예정은 뺀다 — 아직 일어난 일이 아니라 잡아만 둔 약속이고, 그건 레일의
+ *  "다음 연락 예정"이 이미 보여준다. 재컨텍요망·장기가망도 뺀다: 진행 중인 상태지
+ *  결과가 아니다. 세로로 다섯 칸을 늘어놓으면 어느 게 어느 건지 못 읽는다는
+ *  피드백을 받고 둘로 줄였다 — 대신 숫자마다 글자 라벨을 붙인다. */
+export const CONTRACT_RESULT_STATUSES = [
+  { code: 'consulted', label: '미팅완료', colorVar: 'var(--data-status-consulted)' },
+  { code: 'contracted', label: '계약완료', colorVar: 'var(--data-status-contracted)' },
+] as const;
