@@ -55,3 +55,20 @@ export function contractStatusLabel(code: string): string {
 export function contractStatusDot(code: string): string {
   return CONTRACT_STATUSES.find((s) => s.code === code)?.dotVar ?? 'var(--muted-foreground)';
 }
+
+/** 목록에서 "어디까지 갔나"를 한 줄로 보여주는 이정표 3단계.
+ *
+ *  5단계 전부를 열로 만들지는 않는다 — 재컨텍요망·장기가망은 "아직 못 만났다"는 같은 말이라
+ *  진행 상태 배지 하나로 충분하고, 열이 늘어난 만큼 한 줄이 다시 늘어진다.
+ *  이 세 개만 "실제로 일어난 사건"이라 날짜를 찍을 수 있다.
+ *
+ *  색은 --data-status-* 램프 그대로라 오른쪽으로 갈수록 진해진다. 셋 다 흰 배경에서
+ *  본문 대비를 넘긴다(5.4 / 8.0 / 12.0 : 1) — 밝은 쪽 두 단계(재컨텍요망 2.5:1,
+ *  장기가망 3.6:1)는 글자색으로 못 쓰지만 여기엔 안 들어온다. */
+export const CONTRACT_MILESTONES = [
+  { code: 'scheduled', label: '미팅예정', colorVar: 'var(--data-status-scheduled)' },
+  { code: 'consulted', label: '미팅완료', colorVar: 'var(--data-status-consulted)' },
+  { code: 'contracted', label: '계약완료', colorVar: 'var(--data-status-contracted)' },
+] as const;
+
+export const CONTRACT_MILESTONE_CODES = CONTRACT_MILESTONES.map((m) => m.code) as ContractStatus[];
