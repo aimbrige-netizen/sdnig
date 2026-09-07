@@ -37,6 +37,7 @@ import { ContractResultStatus } from "@/components/contract-result-status";
 import { ContractListControls } from "@/components/contract-list-controls";
 import { ContractQuickAdd } from "@/components/contract-quick-add";
 import { ContractCalendar } from "@/components/contract-calendar";
+import { DeleteToast } from "@/components/delete-toast";
 import {
   ContractActivitySummary,
   type DayActivity,
@@ -265,9 +266,12 @@ export default async function ContractsPage({
   const onlyIncomplete = first(sp.incomplete) === "1";
   const activeDate = parseDateParam(first(sp.date)) ?? "";
   const monthParam = parseMonthParam(first(sp.m)) ?? "";
-  // 방금 지운 업체 이름 — 삭제 직후 한 번만 알리는 용도라 ContractQuery(필터 상태)에는
+  // 방금 지운 업체 — 삭제 직후 한 번만 알리는 용도라 ContractQuery(필터 상태)에는
   // 넣지 않는다. 다른 조작을 하면 buildContractsUrl 이 이 키를 안 실어 자연히 사라진다.
+  // did(지운 업체 id)는 "같은 알림인지" 판별용이다. 이름만 보면 같은 이름을 연달아
+  // 지웠을 때 값이 안 변해 두 번째 알림이 안 뜬다. 예전 주소에는 없을 수 있어 이름으로 대체한다.
   const justDeleted = first(sp.deleted).trim().slice(0, 80);
+  const justDeletedToken = first(sp.did).trim().slice(0, 20) || justDeleted;
   const query: ContractQuery = {
     q,
     type: activeType,
@@ -718,15 +722,7 @@ export default async function ContractsPage({
         style={{ backgroundColor: "var(--contracts-bg)" }}
       >
         <main className="mx-auto w-full max-w-shell px-4 py-6">
-          {justDeleted && (
-            <p
-              role="status"
-              className="animate-fade-up mb-4 rounded-lg border px-4 py-2.5 text-sm"
-              style={{ borderColor: "var(--data-warning-ink)", color: "var(--data-warning-ink)" }}
-            >
-              &lsquo;{justDeleted}&rsquo; 을(를) 삭제했습니다. 남아 있던 메모도 함께 지워졌습니다.
-            </p>
-          )}
+          <DeleteToast vendorName={justDeleted} token={justDeletedToken} />
 
           <div className="animate-fade-up mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
