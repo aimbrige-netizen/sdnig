@@ -74,6 +74,7 @@ export default async function VendorsPage({
         category: true,
         region: true,
         contact: true,
+        authorName: true,
         photos: true,
         createdAt: true,
       },
@@ -177,6 +178,7 @@ export default async function VendorsPage({
                   <TableHead>업종</TableHead>
                   <TableHead>지역</TableHead>
                   <TableHead>연락처</TableHead>
+                  <TableHead>작성자</TableHead>
                   <TableHead className="text-right">등록일</TableHead>
                 </TableRow>
               </TableHeader>
@@ -214,6 +216,14 @@ export default async function VendorsPage({
                       </TableCell>
                       <TableCell className="text-muted-foreground">{vendor.region || '지역 미입력'}</TableCell>
                       <TableCell className="text-muted-foreground">{vendor.contact || '-'}</TableCell>
+                      {/* 누가 이 업체 정보를 넣었는지 — 나중에 물어볼 사람이 누구인지가 목록에서 바로 보여야 한다 */}
+                      <TableCell>
+                        {vendor.authorName?.trim() ? (
+                          vendor.authorName
+                        ) : (
+                          <span className="text-xs text-neutral-500">미입력</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right text-muted-foreground">{formatDate(vendor.createdAt)}</TableCell>
                     </TableRow>
                   );
@@ -259,7 +269,10 @@ export default async function VendorsPage({
                       {vendor.contact && (
                         <div className="mt-1 truncate text-sm text-muted-foreground">{vendor.contact}</div>
                       )}
-                      <div className="mt-1 text-xs text-neutral-400">등록 {formatDate(vendor.createdAt)}</div>
+                      <div className="mt-1 text-xs text-neutral-500">
+                        등록 {formatDate(vendor.createdAt)}
+                        {vendor.authorName?.trim() && <> · 작성자 {vendor.authorName}</>}
+                      </div>
                     </div>
                   </Link>
                 </li>
