@@ -6,10 +6,13 @@ import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+// 화면 이름과 경로/테이블 이름이 어긋나 있으니 헷갈리지 말 것.
+//   "계약업체"  = /vendors  = vendors 테이블            — 정보까지 다 받은 최종 명단
+//   "디비관리"  = /contracts = contracted_vendors 테이블 — 컨택·미팅 단계의 진행 상황
 const NAV = [
   { href: '/', label: '대시보드' },
-  { href: '/vendors', label: '업체 리스트' },
-  { href: '/contracts', label: '계약 업체 DB' },
+  { href: '/vendors', label: '계약업체' },
+  { href: '/contracts', label: '디비관리' },
 ] as const;
 
 export function AdminHeader() {

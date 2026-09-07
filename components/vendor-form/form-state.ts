@@ -141,7 +141,7 @@ export function emptyCategoryData(category: CategoryCode): CategoryDataState {
   return state;
 }
 
-/** 계약 업체 DB에서 넘겨받아 미리 채울 값 (같은 정보를 두 번 입력하지 않기 위함) */
+/** 디비관리에서 넘겨받아 미리 채울 값 (같은 정보를 두 번 입력하지 않기 위함) */
 export interface VendorPrefill {
   name: string;
   contact: string;
@@ -362,7 +362,7 @@ export function serializeForm(state: VendorFormState): VendorPayloadInput {
   };
 }
 
-/** 계약 업체 DB에서 가져온 값 → 폼 초기 상태 (등록 화면) */
+/** 디비관리에서 가져온 값 → 폼 초기 상태 (등록 화면) */
 export function formStateFromPrefill(prefill: VendorPrefill): VendorFormState {
   const state = initialFormState();
   state.name = prefill.name;

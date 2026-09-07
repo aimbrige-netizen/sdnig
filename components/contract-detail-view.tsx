@@ -60,7 +60,7 @@ export function ContractDetailView({ vendor }: ContractDetailViewProps) {
       <main className="mx-auto w-full max-w-shell px-4 py-6">
         <div className="animate-fade-up mb-5">
           <Link href="/contracts" className="text-sm text-muted-foreground transition-colors hover:text-neutral-900">
-            ← 계약 업체 DB
+            ← 디비관리
           </Link>
         </div>
 

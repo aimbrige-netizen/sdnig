@@ -75,7 +75,7 @@ const FIELD_TAB: Record<string, TabKey> = {
 
 interface VendorFormProps {
   vendor?: VendorDTO; // 있으면 수정 모드
-  /** 계약 업체 DB에서 넘어온 미리 채움 값 (등록 모드) */
+  /** 디비관리에서 넘어온 미리 채움 값 (등록 모드) */
   prefill?: VendorPrefill;
   /** 이 업체를 저장하면 삭제할 계약 DB 항목 id */
   fromContractId?: number;
@@ -142,7 +142,7 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
         window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
-      // 계약 업체 DB에서 넘어온 건이면, 업체 정보가 완성됐으므로 그 항목을 지운다.
+      // 디비관리에서 넘어온 건이면, 업체 정보가 완성됐으므로 그 항목을 지운다.
       // 삭제가 실패해도 업체 저장은 이미 끝났으므로 흐름을 막지 않는다.
       if (fromContractId) {
         await deleteContract(fromContractId).catch(() => null);
@@ -183,9 +183,9 @@ export function VendorForm({ vendor, prefill, fromContractId }: VendorFormProps)
 
       {prefill && !isEdit && (
         <div className="card-surface animate-fade-up p-4">
-          <p className="text-sm font-medium">계약 업체 DB에서 가져왔습니다</p>
+          <p className="text-sm font-medium">디비관리에서 가져왔습니다</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            업체명·연락처·주소·작성자를 미리 채웠습니다. 저장하면 계약 업체 DB에서 이 항목은 삭제됩니다.
+            업체명·연락처·주소·작성자를 미리 채웠습니다. 저장하면 디비관리에서 이 항목은 삭제됩니다.
           </p>
           {prefill.memo.trim() && (
             <p className="mt-2 rounded-md bg-neutral-50 p-2 text-xs whitespace-pre-wrap text-muted-foreground">

@@ -1,4 +1,4 @@
-// 업체 리스트 (기획서 10절 — 업종 필터 14개+전체, 썸네일/업체명/업종/지역 표시)
+// 계약업체 화면 (/vendors · 기획서 10절 — 업종 필터 14개+전체, 썸네일/업체명/업종/지역 표시)
 // + 지역(시/도-구/군) 필터, 최신순/이름순 정렬, 카드/리스트 보기 전환, 등록일 표시
 import Image from 'next/image';
 import Link from 'next/link';
@@ -140,7 +140,7 @@ export default async function VendorsPage({
       <main className="mx-auto max-w-shell px-4 py-6">
         <div className="mb-5 flex items-center justify-between">
           <h1 className="text-xl font-bold tracking-tight">
-            업체 리스트 <span className="ml-1 text-sm font-normal text-muted-foreground">{vendors.length}개</span>
+            계약업체 <span className="ml-1 text-sm font-normal text-muted-foreground">{vendors.length}개</span>
           </h1>
           {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.
               Button render={<Link/>} 는 Base UI 가 비-button 요소라고 경고한다. */}
@@ -198,7 +198,7 @@ export default async function VendorsPage({
               <div className="card-surface animate-fade-up overflow-hidden">
                 <Table>
                   {/* 이 화면에도 표가 둘(업체 목록 + 담당자별 등록 수)이라 각자 이름이 필요하다 */}
-                  <caption className="sr-only">입점 업체 목록 — 업종·지역·연락처·작성자</caption>
+                  <caption className="sr-only">계약업체 목록 — 업종·지역·연락처·작성자</caption>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-14">사진</TableHead>

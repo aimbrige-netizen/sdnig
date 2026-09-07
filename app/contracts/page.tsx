@@ -1,4 +1,4 @@
-// 계약 업체 DB — 구두/서면 계약만 맺고 상세 정보를 아직 못 받은 업체 명단.
+// 디비관리 (/contracts) — 구두/서면 계약만 맺고 상세 정보를 아직 못 받은 업체 명단.
 //
 // 이 화면이 답해야 하는 질문은 두 가지고, 순서가 있습니다.
 //   1) "어제 미팅 몇 건 했지? 업체랑 컨택은 어떻게 됐지?"  → 활동
@@ -731,7 +731,7 @@ export default async function ContractsPage({
           <div className="animate-fade-up mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-xl font-bold tracking-tight">
-                계약 업체 DB{" "}
+                디비관리{" "}
                 <span className="ml-1 text-sm font-normal text-neutral-600 tabular-nums">
                   {nf.format(matchingTotal)}곳
                 </span>
@@ -747,7 +747,7 @@ export default async function ContractsPage({
               href="/vendors"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
-              입점 업체 리스트
+              계약업체
             </Link>
           </div>
 
@@ -970,7 +970,7 @@ export default async function ContractsPage({
                           옆 칸으로 삐져나온다. 열이 5개에서 7개로 늘어 하한도 820 → 980 이다. */}
                       <Table className="table-fixed min-w-[980px] [&_td]:px-3 [&_td]:py-2.5 [&_th]:px-3">
                         <caption className="sr-only">
-                          계약 업체 목록 — 업체별 연락처와 진행 단계별 날짜
+                          디비관리 업체 목록 — 업체별 연락처와 진행 단계별 날짜
                         </caption>
                         <TableHeader>
                           <TableRow className="[&_th]:text-xs [&_th]:font-semibold [&_th]:tracking-wide [&_th]:text-neutral-600">

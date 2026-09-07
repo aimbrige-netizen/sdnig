@@ -8,7 +8,7 @@ export default function Loading() {
     <>
       <AdminHeader />
       <main className="mx-auto grid max-w-shell place-items-center px-4 py-32">
-        <BrandLoader size="lg" label="계약 업체 DB 불러오는 중" />
+        <BrandLoader size="lg" label="디비관리 불러오는 중" />
       </main>
     </>
   );

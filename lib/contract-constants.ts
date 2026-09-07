@@ -1,4 +1,4 @@
-// 계약 업체 DB 상수 — 계약 형태(서면/구두) 분류
+// 디비관리 상수 — 계약 형태(서면/구두) 분류
 //
 // 색상은 dataviz 스킬의 검증된 categorical 슬롯을 사용합니다.
 // (validate_palette.js, light/흰 카드 표면 기준 전 항목 PASS —
