@@ -105,7 +105,7 @@ export default async function DashboardPage() {
           {/* 실제 이동이므로 <a> 로 두고 버튼 스타일만 입힌다.
               Button render={<Link/>} 는 Base UI 가 비-button 요소라고 경고한다. */}
           <Link href="/vendors" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-            업체 리스트 보기
+            계약업체 보기
           </Link>
         </div>
 

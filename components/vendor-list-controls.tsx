@@ -1,6 +1,6 @@
 'use client';
 
-// 업체 리스트 상단 컨트롤 — 검색, 지역(시/도-구/군) 필터, 정렬, 카드/리스트 보기 전환
+// 계약업체 화면 상단 컨트롤 — 검색, 지역(시/도-구/군) 필터, 정렬, 카드/리스트 보기 전환
 // 현재 필터 상태를 props로 받아 URL 쿼리로 반영합니다 (서버 컴포넌트가 다시 조회).
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';

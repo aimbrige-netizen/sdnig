@@ -150,7 +150,7 @@ const SIDO_SHORT: Record<string, string> = {
 
 /**
  * 자유 입력 주소에서 시/도·구/군을 최대한 추출한다.
- * 계약 업체 DB에 적어둔 주소를 업체 등록 폼의 지역 선택으로 옮길 때 사용.
+ * 디비관리에 적어둔 주소를 업체 등록 폼의 지역 선택으로 옮길 때 사용.
  * 못 찾으면 빈 문자열을 돌려주고, 사용자가 직접 고르면 된다.
  */
 export function parseRegionFromAddress(address: string | null | undefined): { sido: string; gugun: string } {

@@ -1,5 +1,5 @@
 // 업체 등록 (기획서 10절)
-// ?fromContract=<id> 로 들어오면 계약 업체 DB에 적어둔 내용을 미리 채워 넣습니다.
+// ?fromContract=<id> 로 들어오면 디비관리에 적어둔 내용을 미리 채워 넣습니다.
 // 같은 정보를 두 번 입력하지 않게 하고, 저장이 끝나면 그 계약 DB 항목은 삭제됩니다.
 import { notFound } from 'next/navigation';
 import { AdminHeader } from '@/components/admin-header';
