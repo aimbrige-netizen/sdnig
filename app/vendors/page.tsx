@@ -60,7 +60,7 @@ export default async function VendorsPage({
     : {};
 
   // 업체 목록과 업종별 개수(현재 지역/검색 필터 기준)를 함께 조회
-  const [vendors, categoryCounts] = await Promise.all([
+  const [vendors, categoryCounts, authorCounts] = await Promise.all([
     prisma.vendor.findMany({
       where: {
         ...(activeCategory ? { category: activeCategory } : {}),
@@ -84,10 +84,32 @@ export default async function VendorsPage({
       _count: { _all: true },
       where: { ...regionWhere, ...searchWhere },
     }),
+    // 작성자별 등록 수 — 일부러 필터(업종·지역·검색)를 걸지 않는다.
+    // "지금까지 누가 몇 개 넣었나"는 누적 실적이라, 업종 칩을 눌렀다고 줄어들면 안 된다.
+    // 그래서 화면에도 "전체 등록 기준"이라고 못박아 둔다.
+    prisma.vendor.groupBy({ by: ['authorName'], _count: { _all: true } }),
   ]);
 
   const countByCategory = new Map(categoryCounts.map((c) => [c.category, c._count._all]));
   const totalCount = categoryCounts.reduce((sum, c) => sum + c._count._all, 0);
+
+  // 작성자별 등록 수 — 많이 넣은 사람부터, 동점이면 이름순이라 순서가 요청마다 흔들리지 않는다.
+  // 작성자가 비어 있는 건("미입력")은 맨 아래로 몰아둔다 — 사람 이름 사이에 끼면 헷갈리고,
+  // 그 자체가 "채워야 할 것"이라 따로 보이는 편이 낫다.
+  const byAuthor = authorCounts
+    .map((a) => ({ name: a.authorName?.trim() || '', count: a._count._all }))
+    // 같은 사람이 공백만 다르게 들어간 경우(자유 입력 필드다)를 한 줄로 합친다
+    .reduce<{ name: string; count: number }[]>((acc, cur) => {
+      const hit = acc.find((x) => x.name === cur.name);
+      if (hit) hit.count += cur.count;
+      else acc.push({ ...cur });
+      return acc;
+    }, [])
+    .sort((a, b) => {
+      if (!a.name !== !b.name) return a.name ? -1 : 1;
+      return b.count - a.count || a.name.localeCompare(b.name, 'ko');
+    });
+  const authorTotal = byAuthor.reduce((sum, a) => sum + a.count, 0);
 
   const filters = [{ code: '', label: '전체' }, ...CATEGORIES];
 
@@ -159,127 +181,175 @@ export default async function VendorsPage({
           view={view}
         />
 
-        {vendors.length === 0 ? (
-          <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-20 text-center text-muted-foreground">
-            {filterDesc ? `${filterDesc} 조건에 등록된 업체가 없습니다.` : '등록된 업체가 없습니다.'}
-            <div className="mt-3">
-              <Link href="/vendors/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-                새 업체 등록하기
-              </Link>
-            </div>
-          </div>
-        ) : view === 'list' ? (
-          <div className="card-surface animate-fade-up overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-14">사진</TableHead>
-                  <TableHead>업체명</TableHead>
-                  <TableHead>업종</TableHead>
-                  <TableHead>지역</TableHead>
-                  <TableHead>연락처</TableHead>
-                  <TableHead>작성자</TableHead>
-                  <TableHead className="text-right">등록일</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+        {/* 목록 | 작성자별 집계. 좁은 화면에서는 레일이 목록 아래로 내려간다.
+            업종 칩과 검색줄은 그리드 밖(전체 폭)에 둔다 — 칩이 14개라 좁은 칸에 넣으면 줄이 늘어난다. */}
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="min-w-0">
+            {vendors.length === 0 ? (
+              <div className="animate-fade-up rounded-2xl border border-dashed border-black/15 bg-white py-20 text-center text-muted-foreground">
+                {filterDesc ? `${filterDesc} 조건에 등록된 업체가 없습니다.` : '등록된 업체가 없습니다.'}
+                <div className="mt-3">
+                  <Link href="/vendors/new" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                    새 업체 등록하기
+                  </Link>
+                </div>
+              </div>
+            ) : view === 'list' ? (
+              <div className="card-surface animate-fade-up overflow-hidden">
+                <Table>
+                  {/* 이 화면에도 표가 둘(업체 목록 + 담당자별 등록 수)이라 각자 이름이 필요하다 */}
+                  <caption className="sr-only">입점 업체 목록 — 업종·지역·연락처·작성자</caption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-14">사진</TableHead>
+                      <TableHead>업체명</TableHead>
+                      <TableHead>업종</TableHead>
+                      <TableHead>지역</TableHead>
+                      <TableHead>연락처</TableHead>
+                      <TableHead>작성자</TableHead>
+                      <TableHead className="text-right">등록일</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendors.map((vendor) => {
+                      const thumb = mainPhotoUrl(vendor.photos);
+                      return (
+                        <TableRow key={vendor.id}>
+                          <TableCell>
+                            <div className="relative h-10 w-10 overflow-hidden rounded-md bg-neutral-100">
+                              {thumb ? (
+                                <Image
+                                  src={thumb}
+                                  alt={vendor.name}
+                                  fill
+                                  sizes="40px"
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center text-[10px] text-neutral-400">
+                                  없음
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Link href={`/vendors/${vendor.id}`} className="font-medium hover:underline">
+                              {vendor.name}
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+                              {categoryLabel(vendor.category)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{vendor.region || '지역 미입력'}</TableCell>
+                          <TableCell className="text-muted-foreground">{vendor.contact || '-'}</TableCell>
+                          {/* 누가 이 업체 정보를 넣었는지 — 나중에 물어볼 사람이 누구인지가 목록에서 바로 보여야 한다 */}
+                          <TableCell>
+                            {vendor.authorName?.trim() ? (
+                              vendor.authorName
+                            ) : (
+                              <span className="text-xs text-neutral-500">미입력</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">{formatDate(vendor.createdAt)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <ul className="animate-fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {vendors.map((vendor) => {
                   const thumb = mainPhotoUrl(vendor.photos);
                   return (
-                    <TableRow key={vendor.id}>
-                      <TableCell>
-                        <div className="relative h-10 w-10 overflow-hidden rounded-md bg-neutral-100">
+                    <li key={vendor.id}>
+                      <Link
+                        href={`/vendors/${vendor.id}`}
+                        className="card-surface flex gap-3 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift"
+                      >
+                        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100">
                           {thumb ? (
                             <Image
                               src={thumb}
                               alt={vendor.name}
                               fill
-                              sizes="40px"
+                              sizes="80px"
                               className="object-cover"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[10px] text-neutral-400">
-                              없음
+                            <div className="flex h-full w-full items-center justify-center text-xs text-neutral-400">
+                              사진 없음
                             </div>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Link href={`/vendors/${vendor.id}`} className="font-medium hover:underline">
-                          {vendor.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
-                          {categoryLabel(vendor.category)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{vendor.region || '지역 미입력'}</TableCell>
-                      <TableCell className="text-muted-foreground">{vendor.contact || '-'}</TableCell>
-                      {/* 누가 이 업체 정보를 넣었는지 — 나중에 물어볼 사람이 누구인지가 목록에서 바로 보여야 한다 */}
-                      <TableCell>
-                        {vendor.authorName?.trim() ? (
-                          vendor.authorName
-                        ) : (
-                          <span className="text-xs text-neutral-500">미입력</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right text-muted-foreground">{formatDate(vendor.createdAt)}</TableCell>
-                    </TableRow>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate font-medium">{vendor.name}</span>
+                          </div>
+                          <div className="mt-1 text-sm text-muted-foreground">
+                            <span className="mr-2 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
+                              {categoryLabel(vendor.category)}
+                            </span>
+                            {vendor.region || '지역 미입력'}
+                          </div>
+                          {vendor.contact && (
+                            <div className="mt-1 truncate text-sm text-muted-foreground">{vendor.contact}</div>
+                          )}
+                          <div className="mt-1 text-xs text-neutral-500">
+                            등록 {formatDate(vendor.createdAt)}
+                            {vendor.authorName?.trim() && <> · 작성자 {vendor.authorName}</>}
+                          </div>
+                        </div>
+                      </Link>
+                    </li>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </ul>
+            )}
           </div>
-        ) : (
-          <ul className="animate-fade-up grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {vendors.map((vendor) => {
-              const thumb = mainPhotoUrl(vendor.photos);
-              return (
-                <li key={vendor.id}>
-                  <Link
-                    href={`/vendors/${vendor.id}`}
-                    className="card-surface flex gap-3 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lift"
-                  >
-                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100">
-                      {thumb ? (
-                        <Image
-                          src={thumb}
-                          alt={vendor.name}
-                          fill
-                          sizes="80px"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-neutral-400">
-                          사진 없음
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">{vendor.name}</span>
-                      </div>
-                      <div className="mt-1 text-sm text-muted-foreground">
-                        <span className="mr-2 inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600">
-                          {categoryLabel(vendor.category)}
-                        </span>
-                        {vendor.region || '지역 미입력'}
-                      </div>
-                      {vendor.contact && (
-                        <div className="mt-1 truncate text-sm text-muted-foreground">{vendor.contact}</div>
-                      )}
-                      <div className="mt-1 text-xs text-neutral-500">
-                        등록 {formatDate(vendor.createdAt)}
-                        {vendor.authorName?.trim() && <> · 작성자 {vendor.authorName}</>}
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+
+          {/* 작성자별 등록 수 — 헤더가 56px 스티키라 그 아래에 붙인다 */}
+          <aside className="animate-fade-up lg:sticky lg:top-[4.5rem]">
+            <section className="card-surface px-4 py-3">
+              <h2 className="mb-1.5 text-sm font-semibold">
+                담당자별 등록 수{' '}
+                <span className="text-xs font-normal text-neutral-600">전체 등록 기준</span>
+              </h2>
+              {byAuthor.length === 0 ? (
+                <p className="py-2 text-[13px] text-neutral-600">아직 등록된 업체가 없습니다.</p>
+              ) : (
+                <table className="w-full">
+                  {/* 한 화면에 표가 둘이라 이쪽에도 이름이 있어야 스크린리더에서 구분된다 */}
+                  <caption className="sr-only">담당자별 등록한 업체 수 (전체 기준)</caption>
+                  <tbody>
+                    {byAuthor.map((a) => (
+                      <tr key={a.name || '__none__'} className="border-b border-black/[0.05] last:border-b-0">
+                        <td className="max-w-0 truncate py-2 pr-2 text-sm" title={a.name || '작성자 미입력'}>
+                          {a.name || <span className="text-neutral-500">미입력</span>}
+                        </td>
+                        <td className="w-16 py-2 text-right text-base font-semibold tabular-nums">
+                          {a.count}
+                          <span className="sr-only">개</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-black/[0.08]">
+                      <td className="py-2 pr-2 text-sm font-medium">합계</td>
+                      <td className="py-2 text-right text-base font-semibold tabular-nums">
+                        {authorTotal}
+                        <span className="sr-only">개</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </section>
+          </aside>
+        </div>
       </main>
     </>
   );
