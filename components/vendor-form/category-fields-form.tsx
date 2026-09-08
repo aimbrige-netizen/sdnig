@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { CATEGORY_FIELDS, type CategoryField, type RepeatItemField } from '@/lib/category-fields';
-import type { CategoryCode } from '@/lib/constants';
+import { categoryLabel, type CategoryCode } from '@/lib/constants';
 import { emptyRepeatRow, type CategoryDataState, type RepeatRow } from './form-state';
 import { NativeSelect } from './native-select';
 import { TimeRangeSelect, TimeSelect } from './time-select';
@@ -24,6 +24,18 @@ export function CategoryFieldsForm({ category, value, onChange }: CategoryFields
 
   function patch(partial: CategoryDataState) {
     onChange({ ...value, ...partial });
+  }
+
+  // 여행사처럼 업종별로 따로 받을 항목이 없는 경우. 빈 탭만 덩그러니 두면
+  // 아직 안 만든 화면인지 원래 없는 건지 구분이 안 된다.
+  if (fields.length === 0) {
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        {categoryLabel(category)}는 업종별로 따로 받는 정보가 없습니다.
+        <br />
+        [공통정보] 와 [사진관리] 탭만 채우면 됩니다.
+      </p>
+    );
   }
 
   return (

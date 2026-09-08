@@ -1,4 +1,4 @@
-// 계약업체 화면 (/vendors · 기획서 10절 — 업종 필터 14개+전체, 썸네일/업체명/업종/지역 표시)
+// 계약업체 화면 (/vendors · 기획서 10절 — 업종 필터 전체+업종별, 썸네일/업체명/업종/지역 표시)
 // + 지역(시/도-구/군) 필터, 최신순/이름순 정렬, 카드/리스트 보기 전환, 등록일 표시
 import Image from 'next/image';
 import Link from 'next/link';
@@ -182,7 +182,7 @@ export default async function VendorsPage({
         />
 
         {/* 목록 | 작성자별 집계. 좁은 화면에서는 레일이 목록 아래로 내려간다.
-            업종 칩과 검색줄은 그리드 밖(전체 폭)에 둔다 — 칩이 14개라 좁은 칸에 넣으면 줄이 늘어난다. */}
+            업종 칩과 검색줄은 그리드 밖(전체 폭)에 둔다 — 칩이 많아 좁은 칸에 넣으면 줄이 늘어난다. */}
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
             {vendors.length === 0 ? (

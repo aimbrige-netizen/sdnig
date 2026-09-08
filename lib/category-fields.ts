@@ -32,6 +32,10 @@ const SNAP_FIELDS: CategoryField[] = [
 ];
 
 export const CATEGORY_FIELDS: Record<CategoryCode, CategoryField[]> = {
+  // 여행사는 업종별로 따로 받을 항목이 없어 비워 둔다. 상품구성·옵션·혜택 같은
+  // 내용은 전부 공통정보에 이미 있다. 빈 배열이면 폼이 [업종별 정보] 탭에
+  // 안내만 띄우고 넘어간다(components/vendor-form/category-fields-form.tsx).
+  travel: [],
   // 6.1 웨딩홀
   wedding_hall: [
     {

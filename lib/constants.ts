@@ -14,6 +14,7 @@ export const CATEGORIES = [
   { code: 'bouquet', label: '부케' },
   { code: 'invitation', label: '청첩장' },
   { code: 'mc', label: '사회' },
+  { code: 'travel', label: '여행사' },
 ] as const;
 
 export type CategoryCode = (typeof CATEGORIES)[number]['code'];

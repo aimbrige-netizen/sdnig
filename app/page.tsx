@@ -1,10 +1,11 @@
 // 홈 대시보드 — 수집 진행률 (통합 / 웨딩·혼수 그룹별 / 그룹별 지역 진행률)
 // 목표치는 lib/dashboard-targets.ts (전국 웨딩업체·혼수업체 파악 엑셀 기반 정적 데이터).
-// 앱의 14개 업종 전부가 두 그룹 중 하나에 배정되어 있어(기타/제외 카테고리 없음),
+// 앱의 업종 전부가 두 그룹 중 하나에 배정되어 있어(기타/제외 카테고리 없음),
 // 등록된 업체는 목표 수치 유무와 무관하게 항상 해당 그룹·지역 집계에 반영된다.
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin-header';
 import { buttonVariants } from '@/components/ui/button';
+import { CATEGORIES } from '@/lib/constants';
 import { TARGET_GROUPS, type TargetGroup } from '@/lib/dashboard-targets';
 import { SIDO_LIST, splitRegion } from '@/lib/regions';
 import { prisma } from '@/lib/prisma';
@@ -130,7 +131,7 @@ export default async function DashboardPage() {
           </div>
           {noTargetCategoryCount > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">
-              14개 업종 중 {noTargetCategoryCount}개는 아직 목표 수치가 없어 등록 건수만 집계됩니다 (아래 업종별
+              {CATEGORIES.length}개 업종 중 {noTargetCategoryCount}개는 아직 목표 수치가 없어 등록 건수만 집계됩니다 (아래 업종별
               내역에 &quot;목표 미설정&quot;으로 표시). 모든 업종의 등록은 이 통합 진행률에 빠짐없이 포함됩니다.
             </p>
           )}
