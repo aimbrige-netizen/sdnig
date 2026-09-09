@@ -353,11 +353,11 @@ export function ContractCalendar({
           className="grid-cols-3"
           size="sm"
         />
+        {/* "이 달"이라고만 쓰면 달을 넘겼을 때 어느 달 숫자인지 알 수가 없다.
+            바로 위 "8월 합계"와 같은 규칙으로 달을 밝힌다(연도는 카드 머리말에 있다). */}
         <h4 className="mt-3 mb-1.5 text-xs font-semibold text-neutral-700">
-          담당자별{" "}
-          <span className="font-normal text-neutral-600">
-            이 달 실적 · 맡은 업체 기준
-          </span>
+          담당자별 {Number(month.slice(5))}월 실적{" "}
+          <span className="font-normal text-neutral-600">· 맡은 업체 기준</span>
         </h4>
         <ManagerTable
           rows={byManager}
