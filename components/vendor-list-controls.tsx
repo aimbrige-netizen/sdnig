@@ -18,9 +18,13 @@ interface VendorListControlsProps {
   gugun: string;
   sort: VendorSort;
   view: VendorView;
+  /** 오른쪽 월별 실적이 보고 있는 달(YYYY-MM). 이번 달이면 빈 문자열 — 주소에 안 남긴다.
+   *  여기서 URL 을 처음부터 다시 만들기 때문에, 넘겨받아 다시 실어주지 않으면
+   *  검색·정렬·보기만 바꿔도 보던 달이 슬그머니 이번 달로 돌아가 버린다. */
+  month: string;
 }
 
-export function VendorListControls({ q, category, sido, gugun, sort, view }: VendorListControlsProps) {
+export function VendorListControls({ q, category, sido, gugun, sort, view, month }: VendorListControlsProps) {
   const router = useRouter();
   const [text, setText] = useState(q);
 
@@ -39,6 +43,7 @@ export function VendorListControls({ q, category, sido, gugun, sort, view }: Ven
     if (next.sido && next.gugun) params.set('gugun', next.gugun);
     if (next.sort !== 'latest') params.set('sort', next.sort);
     if (next.view !== 'card') params.set('view', next.view);
+    if (month) params.set('m', month);
     const qs = params.toString();
     return qs ? `/vendors?${qs}` : '/vendors';
   }

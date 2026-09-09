@@ -8,6 +8,8 @@ import { VendorListControls, type VendorSort, type VendorView } from '@/componen
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CATEGORIES, categoryLabel, type VendorPhoto } from '@/lib/constants';
 import { SIDO_LIST, gugunsOf, joinRegion } from '@/lib/regions';
+import { addMonths, formatMonthLabel, monthOf, parseMonthParam } from '@/lib/contract-activity';
+import { kstDayStartUTC, todayKST } from '@/lib/format-date';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -30,10 +32,78 @@ function formatDate(date: Date): string {
     .replace(/\.$/, '');
 }
 
+/** 담당자별 등록 수 표. 월별·누적 두 군데가 같은 모양이라야 눈이 옮겨가기 쉽다. */
+function AuthorTable({
+  rows,
+  total,
+  caption,
+}: {
+  rows: { name: string; count: number }[];
+  total: number;
+  caption: string;
+}) {
+  return (
+    <table className="w-full">
+      {/* 한 화면에 표가 여럿이라 각자 이름이 있어야 스크린리더에서 구분된다 */}
+      <caption className="sr-only">{caption}</caption>
+      <tbody>
+        {rows.map((a) => (
+          <tr key={a.name || '__none__'} className="border-b border-black/[0.05] last:border-b-0">
+            <td className="max-w-0 truncate py-2 pr-2 text-sm" title={a.name || '작성자 미입력'}>
+              {a.name || <span className="text-neutral-500">미입력</span>}
+            </td>
+            <td className="w-16 py-2 text-right tabular-nums">
+              {/* 0 은 옅게 — 실적이 있는 숫자가 먼저 눈에 들어와야 한다 */}
+              <span className={a.count === 0 ? 'text-[15px] text-neutral-300' : 'text-base font-semibold'}>
+                {a.count}
+              </span>
+              <span className="sr-only">개</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr className="border-t-2 border-black/[0.08]">
+          <td className="py-2 pr-2 text-sm font-medium">합계</td>
+          <td className="py-2 text-right text-base font-semibold tabular-nums">
+            {total}
+            <span className="sr-only">개</span>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+/** 자유 입력 필드라 같은 사람이 공백만 다르게 들어올 수 있다 — 한 줄로 합친다. */
+function mergeAuthors(rows: { authorName: string | null; _count: { _all: number } }[]) {
+  return rows
+    .map((a) => ({ name: a.authorName?.trim() || '', count: a._count._all }))
+    .reduce<{ name: string; count: number }[]>((acc, cur) => {
+      const hit = acc.find((x) => x.name === cur.name);
+      if (hit) hit.count += cur.count;
+      else acc.push({ ...cur });
+      return acc;
+    }, []);
+}
+
+/** 많이 넣은 사람부터, 동점이면 이름순이라 순서가 요청마다 흔들리지 않는다.
+ *  작성자가 빈 건("미입력")은 맨 아래로 — 사람 이름 사이에 끼면 헷갈리고,
+ *  그 자체가 "채워야 할 것"이라 따로 보이는 편이 낫다. */
+function sortAuthors<T extends { name: string; count: number }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    if (!a.name !== !b.name) return a.name ? -1 : 1;
+    return b.count - a.count || a.name.localeCompare(b.name, 'ko');
+  });
+}
+
 export default async function VendorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; sido?: string; gugun?: string; sort?: string; view?: string }>;
+  searchParams: Promise<{
+    q?: string; category?: string; sido?: string; gugun?: string;
+    sort?: string; view?: string; m?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? '').trim().slice(0, 100);
@@ -42,6 +112,11 @@ export default async function VendorsPage({
   const activeGugun = activeSido && gugunsOf(activeSido).includes(sp.gugun ?? '') ? sp.gugun! : '';
   const sort: VendorSort = sp.sort === 'name' ? 'name' : 'latest';
   const view: VendorView = sp.view === 'list' ? 'list' : 'card';
+  // 월별 등록 실적이 보고 있는 달. 이번 달이 기본이라 주소에는 남기지 않는다
+  // (monthParam 이 빈 문자열이면 "기본 상태" — 아래 링크들이 이 규칙을 그대로 따른다).
+  const thisMonth = monthOf(todayKST());
+  const monthParam = parseMonthParam(sp.m ?? '') ?? '';
+  const activeMonth = monthParam || thisMonth;
 
   const regionWhere = activeSido
     ? { region: activeGugun ? joinRegion(activeSido, activeGugun) : { startsWith: activeSido } }
@@ -60,7 +135,7 @@ export default async function VendorsPage({
     : {};
 
   // 업체 목록과 업종별 개수(현재 지역/검색 필터 기준)를 함께 조회
-  const [vendors, categoryCounts, authorCounts] = await Promise.all([
+  const [vendors, categoryCounts, authorCounts, monthAuthorCounts] = await Promise.all([
     prisma.vendor.findMany({
       where: {
         ...(activeCategory ? { category: activeCategory } : {}),
@@ -88,43 +163,57 @@ export default async function VendorsPage({
     // "지금까지 누가 몇 개 넣었나"는 누적 실적이라, 업종 칩을 눌렀다고 줄어들면 안 된다.
     // 그래서 화면에도 "전체 등록 기준"이라고 못박아 둔다.
     prisma.vendor.groupBy({ by: ['authorName'], _count: { _all: true } }),
+    // 그 달에 등록한 건수. createdAt 은 진짜 타임스탬프라 KST 하루가 시작되는 순간으로
+    // 구간을 잡아야 한다 — UTC 자정으로 자르면 한국 시간 0~9시 등록분이 앞 달로 밀린다.
+    prisma.vendor.groupBy({
+      by: ['authorName'],
+      _count: { _all: true },
+      where: {
+        createdAt: {
+          gte: kstDayStartUTC(`${activeMonth}-01`),
+          lt: kstDayStartUTC(`${addMonths(activeMonth, 1)}-01`),
+        },
+      },
+    }),
   ]);
 
   const countByCategory = new Map(categoryCounts.map((c) => [c.category, c._count._all]));
   const totalCount = categoryCounts.reduce((sum, c) => sum + c._count._all, 0);
 
-  // 작성자별 등록 수 — 많이 넣은 사람부터, 동점이면 이름순이라 순서가 요청마다 흔들리지 않는다.
-  // 작성자가 비어 있는 건("미입력")은 맨 아래로 몰아둔다 — 사람 이름 사이에 끼면 헷갈리고,
-  // 그 자체가 "채워야 할 것"이라 따로 보이는 편이 낫다.
-  const byAuthor = authorCounts
-    .map((a) => ({ name: a.authorName?.trim() || '', count: a._count._all }))
-    // 같은 사람이 공백만 다르게 들어간 경우(자유 입력 필드다)를 한 줄로 합친다
-    .reduce<{ name: string; count: number }[]>((acc, cur) => {
-      const hit = acc.find((x) => x.name === cur.name);
-      if (hit) hit.count += cur.count;
-      else acc.push({ ...cur });
-      return acc;
-    }, [])
-    .sort((a, b) => {
-      if (!a.name !== !b.name) return a.name ? -1 : 1;
-      return b.count - a.count || a.name.localeCompare(b.name, 'ko');
-    });
+  // 누적과 월별이 서로 다른 규칙으로 세면 두 표의 숫자가 안 맞는다 — 규칙을 함수로 묶어 공유한다.
+  const byAuthor = sortAuthors(mergeAuthors(authorCounts));
   const authorTotal = byAuthor.reduce((sum, a) => sum + a.count, 0);
+
+  // 이 달 등록 수. 이 달에 한 건도 안 넣은 사람도 0 으로 자리를 지킨다 —
+  // 명단에서 사라지면 "아무것도 안 했다"는 사실 자체가 안 보인다.
+  // 다만 "미입력"은 사람이 아니라 빈 칸이라, 그 달에 없으면 굳이 0 으로 남기지 않는다.
+  const monthByName = new Map(mergeAuthors(monthAuthorCounts).map((a) => [a.name, a.count]));
+  const byAuthorMonth = sortAuthors(
+    byAuthor
+      .map((a) => ({ name: a.name, count: monthByName.get(a.name) ?? 0 }))
+      .filter((a) => a.name !== '' || a.count > 0),
+  );
+  const monthTotal = byAuthorMonth.reduce((sum, a) => sum + a.count, 0);
 
   const filters = [{ code: '', label: '전체' }, ...CATEGORIES];
 
-  // 업종 칩 링크 — 검색/지역/정렬/보기 상태를 유지한 채 업종만 교체
-  function chipHref(code: string): string {
+  // 화면 상태를 그대로 둔 채 한 가지만 바꾸는 링크. 업종 칩과 달 넘기기가 같은 함수를
+  // 쓰는 이유는, 한쪽만 파라미터를 빠뜨리면 누를 때마다 다른 설정이 슬그머니 풀리기 때문이다.
+  function vendorsHref(over: { category?: string; month?: string } = {}): string {
+    const category = over.category ?? activeCategory ?? '';
+    const month = over.month ?? activeMonth;
     const params = new URLSearchParams();
     if (q) params.set('q', q);
-    if (code) params.set('category', code);
+    if (category) params.set('category', category);
     if (activeSido) params.set('sido', activeSido);
     if (activeGugun) params.set('gugun', activeGugun);
     if (sort !== 'latest') params.set('sort', sort);
     if (view !== 'card') params.set('view', view);
+    if (month !== thisMonth) params.set('m', month);
     const qs = params.toString();
     return qs ? `/vendors?${qs}` : '/vendors';
   }
+  const chipHref = (code: string) => vendorsHref({ category: code });
 
   const filterDesc = [
     q ? `"${q}" 검색` : '',
@@ -179,6 +268,7 @@ export default async function VendorsPage({
           gugun={activeGugun}
           sort={sort}
           view={view}
+          month={monthParam}
         />
 
         {/* 목록 | 작성자별 집계. 좁은 화면에서는 레일이 목록 아래로 내려간다.
@@ -310,8 +400,51 @@ export default async function VendorsPage({
             )}
           </div>
 
-          {/* 작성자별 등록 수 — 헤더가 56px 스티키라 그 아래에 붙인다 */}
-          <aside className="animate-fade-up lg:sticky lg:top-[4.5rem]">
+          {/* 담당자별 등록 실적 — 헤더가 56px 스티키라 그 아래에 붙인다 */}
+          <aside className="animate-fade-up space-y-4 lg:sticky lg:top-[4.5rem]">
+            {/* 월별이 먼저. "이번 달 누가 몇 개 넣었나"가 매일 보는 숫자고,
+                누적은 그 아래에서 확인하면 된다. */}
+            <section className="card-surface px-4 py-3">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">
+                  담당자별 {Number(activeMonth.slice(5))}월 등록{' '}
+                  {/* 해가 넘어갔을 때만 연도를 붙인다 — 평소엔 "9월"로 충분하고,
+                      늘 "2026년 9월"이라고 쓰면 좁은 레일에서 줄이 넘어간다. */}
+                  <span className="text-xs font-normal text-neutral-600">
+                    {activeMonth.slice(0, 4) !== thisMonth.slice(0, 4)
+                      ? `${Number(activeMonth.slice(0, 4))}년 · 등록일 기준`
+                      : '등록일 기준'}
+                  </span>
+                </h2>
+                {/* 달 넘기기 — 디비관리 달력과 같은 조작이라 따로 배울 게 없다 */}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Link
+                    href={vendorsHref({ month: addMonths(activeMonth, -1) })}
+                    aria-label="이전 달"
+                    className="grid size-6 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900"
+                  >
+                    &lsaquo;
+                  </Link>
+                  <Link
+                    href={vendorsHref({ month: addMonths(activeMonth, 1) })}
+                    aria-label="다음 달"
+                    className="grid size-6 place-items-center rounded text-neutral-500 transition-colors hover:bg-neutral-900/5 hover:text-neutral-900"
+                  >
+                    &rsaquo;
+                  </Link>
+                </div>
+              </div>
+              {byAuthorMonth.length === 0 ? (
+                <p className="py-2 text-[13px] text-neutral-600">아직 등록된 업체가 없습니다.</p>
+              ) : (
+                <AuthorTable
+                  rows={byAuthorMonth}
+                  total={monthTotal}
+                  caption={`담당자별 ${formatMonthLabel(activeMonth)} 등록한 업체 수`}
+                />
+              )}
+            </section>
+
             <section className="card-surface px-4 py-3">
               <h2 className="mb-1.5 text-sm font-semibold">
                 담당자별 등록 수{' '}
@@ -320,32 +453,11 @@ export default async function VendorsPage({
               {byAuthor.length === 0 ? (
                 <p className="py-2 text-[13px] text-neutral-600">아직 등록된 업체가 없습니다.</p>
               ) : (
-                <table className="w-full">
-                  {/* 한 화면에 표가 둘이라 이쪽에도 이름이 있어야 스크린리더에서 구분된다 */}
-                  <caption className="sr-only">담당자별 등록한 업체 수 (전체 기준)</caption>
-                  <tbody>
-                    {byAuthor.map((a) => (
-                      <tr key={a.name || '__none__'} className="border-b border-black/[0.05] last:border-b-0">
-                        <td className="max-w-0 truncate py-2 pr-2 text-sm" title={a.name || '작성자 미입력'}>
-                          {a.name || <span className="text-neutral-500">미입력</span>}
-                        </td>
-                        <td className="w-16 py-2 text-right text-base font-semibold tabular-nums">
-                          {a.count}
-                          <span className="sr-only">개</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-black/[0.08]">
-                      <td className="py-2 pr-2 text-sm font-medium">합계</td>
-                      <td className="py-2 text-right text-base font-semibold tabular-nums">
-                        {authorTotal}
-                        <span className="sr-only">개</span>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
+                <AuthorTable
+                  rows={byAuthor}
+                  total={authorTotal}
+                  caption="담당자별 등록한 업체 수 (전체 기준)"
+                />
               )}
             </section>
           </aside>
