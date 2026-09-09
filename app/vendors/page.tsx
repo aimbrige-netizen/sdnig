@@ -115,7 +115,11 @@ export default async function VendorsPage({
   // 월별 등록 실적이 보고 있는 달. 이번 달이 기본이라 주소에는 남기지 않는다
   // (monthParam 이 빈 문자열이면 "기본 상태" — 아래 링크들이 이 규칙을 그대로 따른다).
   const thisMonth = monthOf(todayKST());
-  const monthParam = parseMonthParam(sp.m ?? '') ?? '';
+  const rawMonth = parseMonthParam(sp.m ?? '') ?? '';
+  // ?m= 로 이번 달이 대놓고 들어와도 빈 값으로 접는다. 이걸 안 하면 아래 두 URL 빌더가
+  // 서로 다른 판정을 해서(한쪽은 "기본값이니 빼자", 한쪽은 "값이 있으니 싣자")
+  // 칩을 누를 때와 검색할 때 주소가 갈린다.
+  const monthParam = rawMonth === thisMonth ? '' : rawMonth;
   const activeMonth = monthParam || thisMonth;
 
   const regionWhere = activeSido
@@ -434,8 +438,13 @@ export default async function VendorsPage({
                   </Link>
                 </div>
               </div>
-              {byAuthorMonth.length === 0 ? (
+              {/* 빈 경우가 두 가지다. 하나로 묶으면 바로 아래 누적 카드가 "미입력 3"을
+                  보여주는데 이쪽은 "아직 등록된 업체가 없습니다"라고 하는, 같은 화면에서
+                  서로 반박하는 상태가 나온다(작성자가 전부 비어 있고 그 달 등록이 없을 때). */}
+              {byAuthor.length === 0 ? (
                 <p className="py-2 text-[13px] text-neutral-600">아직 등록된 업체가 없습니다.</p>
+              ) : byAuthorMonth.length === 0 ? (
+                <p className="py-2 text-[13px] text-neutral-600">이 달에 등록한 업체가 없습니다.</p>
               ) : (
                 <AuthorTable
                   rows={byAuthorMonth}
