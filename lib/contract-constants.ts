@@ -96,4 +96,4 @@ export const CONTRACT_RESULT_STATUSES = [
  *  ⚠️ 여기 없는 이름이 이미 저장돼 있는 업체도 있다(자유 입력이던 시절의 값). 그건
  *  지우지 않는다 — 수정 폼에서는 그 값도 선택지로 함께 띄워, 다른 칸만 고치다가
  *  담당자가 조용히 바뀌는 일이 없게 한다(components/contract-fields.tsx). */
-export const DB_MANAGERS = ['김윤옥', '정연지'] as const;
+export const DB_MANAGERS = ['김윤옥', '정연지', '박미영'] as const;
